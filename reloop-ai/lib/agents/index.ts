@@ -84,6 +84,9 @@ export async function runAgentPipeline(
       cloudBackup: "Nebius",
       voice: "ElevenLabs",
     },
-    demoMode: !process.env.OPENAI_API_KEY && !process.env.ELEVENLABS_API_KEY,
+    demoMode:
+      !process.env.OPENAI_API_KEY &&
+      !process.env.ELEVEN_API_KEY &&
+      !process.env.ELEVENLABS_API_KEY,
   };
 }
