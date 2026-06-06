@@ -118,6 +118,32 @@ npm run dev
 
 > *"DGX Spark handles orchestration, but when we need heavier inference or cloud-scale reasoning, we offload to Nebius. This gives ReLoop AI distributed compute and keeps the multi-agent pipeline running even when local capacity is saturated."*
 
+## Demo Datasets
+
+ReLoop AI includes lightweight dummy datasets based on structures from the
+London Datastore (https://data.london.gov.uk). These files allow the system
+to run end-to-end without downloading large public datasets.
+
+All demo data lives in `/data/` and includes:
+
+- Waste & recycling streams
+- Public asset inventory
+- Carbon factors by borough
+- Circular economy pricing
+- Repairability & lifecycle scores
+- Borough lookup metadata
+- Example asset embeddings
+
+| File | Purpose |
+|------|---------|
+| `london_waste_streams.csv` | Borough waste & recycling volumes |
+| `london_public_assets.csv` | Sample laptops, monitors, switches, servers |
+| `borough_carbon_factors.csv` | Grid intensity & emissions by borough |
+| `circular_economy_prices.csv` | Resale, refurb, and recycle values |
+| `asset_repairability_scores.csv` | Lifecycle & repairability by category |
+| `london_borough_lookup.json` | Borough population & area metadata |
+| `inventory_embeddings_dummy.json` | Example embeddings for inference testing |
+
 ## Demo Inventory
 
 - 120 laptops · 35 monitors · 15 switches · 10 servers

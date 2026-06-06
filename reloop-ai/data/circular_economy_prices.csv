@@ -1,0 +1,6 @@
+category,condition,resale_value_gbp,refurb_cost_gbp,recycle_value_gbp
+laptop,A,220,30,8
+laptop,B,160,45,6
+laptop,C,80,60,4
+monitor,A,70,10,2
+server,C,150,80,12

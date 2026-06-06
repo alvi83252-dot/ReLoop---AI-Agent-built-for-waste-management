@@ -64,10 +64,25 @@ export async function runCarbonAgent(ctx: AgentContext): Promise<AgentContext> {
   await simulateAgentDelay(400);
 
   const { estimateCarbonForItem } = await import("@/lib/simulation/londonData");
-  const { nebiusCarbonAnalysis } = await import("@/lib/llm/nebius");
 
   const localEstimates = ctx.inventory.map((item) => estimateCarbonForItem(item));
+  const { nebiusCarbonAnalysis, NEBIUS_CARBON_OFFLOAD_MESSAGE } = await import(
+    "@/lib/llm/nebius"
+  );
   const nebius = await nebiusCarbonAnalysis(ctx.inventory, localEstimates);
+
+  if (nebius.status === "live") {
+    ctx.timeline.push(
+      completeStep(
+        createStep(
+          "Cloud Offload — Nebius",
+          "dgx",
+          NEBIUS_CARBON_OFFLOAD_MESSAGE,
+          "complete"
+        )
+      )
+    );
+  }
 
   ctx.carbon = ctx.inventory.map((item, idx) => {
     const saved = nebius.estimates[idx] ?? localEstimates[idx];

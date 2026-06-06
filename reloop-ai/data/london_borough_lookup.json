@@ -1,0 +1,7 @@
+{
+  "Camden": { "population": 210000, "area_km2": 22 },
+  "Hackney": { "population": 280000, "area_km2": 19 },
+  "Southwark": { "population": 320000, "area_km2": 29 },
+  "Westminster": { "population": 260000, "area_km2": 21 },
+  "Tower Hamlets": { "population": 330000, "area_km2": 20 }
+}

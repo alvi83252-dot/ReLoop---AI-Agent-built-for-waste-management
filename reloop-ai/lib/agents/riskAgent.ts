@@ -61,7 +61,9 @@ export async function runReflectionAgent(ctx: AgentContext): Promise<AgentContex
     0
   );
 
-  const { nebiusReflection } = await import("@/lib/llm/nebius");
+  const { nebiusReflection, NEBIUS_REFLECTION_OFFLOAD_MESSAGE } = await import(
+    "@/lib/llm/nebius"
+  );
   const nebiusText = await nebiusReflection({
     inventoryCount: ctx.inventory.length,
     reuseCount,
@@ -71,6 +73,19 @@ export async function runReflectionAgent(ctx: AgentContext): Promise<AgentContex
   });
 
   ctx.reflection = nebiusText ? `Nebius reflection: ${nebiusText}` : fallbackReflection;
+
+  if (nebiusText) {
+    ctx.timeline.push(
+      completeStep(
+        createStep(
+          "Cloud Offload — Nebius",
+          "synthesis",
+          NEBIUS_REFLECTION_OFFLOAD_MESSAGE,
+          "complete"
+        )
+      )
+    );
+  }
 
   ctx.timeline.push(
     completeStep(

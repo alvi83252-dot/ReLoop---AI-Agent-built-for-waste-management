@@ -1,7 +1,22 @@
 import type { InventoryItem } from "@/lib/types";
 
 const DEFAULT_ENDPOINT = "https://api.tokenfactory.nebius.com/v1";
-const DEFAULT_MODEL = "deepseek-ai/DeepSeek-R1-0528";
+const DEFAULT_MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct";
+
+const MODEL_PREFERENCES = [
+  "meta-llama/Meta-Llama-3.1-8B-Instruct",
+  "meta-llama/Llama-3.3-70B-Instruct",
+  "Qwen/Qwen2.5-72B-Instruct",
+  "deepseek-ai/DeepSeek-R1-0528",
+];
+
+export const NEBIUS_REFLECTION_OFFLOAD_MESSAGE =
+  "DGX local chain complete → offloading Reflection Agent to Nebius Token Factory";
+
+export const NEBIUS_CARBON_OFFLOAD_MESSAGE =
+  "DGX local chain complete → offloading Carbon Impact Agent to Nebius Token Factory";
+
+let resolvedModel: string | null = null;
 
 export interface NebiusConfig {
   apiKey: string;
@@ -29,6 +44,83 @@ interface ChatMessage {
   content: string;
 }
 
+async function listNebiusModels(config: NebiusConfig): Promise<string[]> {
+  try {
+    const response = await fetch(`${config.endpoint}/models`, {
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    });
+
+    if (!response.ok) return [];
+
+    const data = (await response.json()) as { data?: Array<{ id: string }> };
+    return (data.data ?? []).map((model) => model.id);
+  } catch {
+    return [];
+  }
+}
+
+async function resolveNebiusModel(config: NebiusConfig): Promise<string> {
+  if (resolvedModel) return resolvedModel;
+
+  const available = await listNebiusModels(config);
+  if (available.length === 0) {
+    resolvedModel = config.model;
+    return resolvedModel;
+  }
+
+  if (available.includes(config.model)) {
+    resolvedModel = config.model;
+    return resolvedModel;
+  }
+
+  for (const preferred of MODEL_PREFERENCES) {
+    if (available.includes(preferred)) {
+      resolvedModel = preferred;
+      console.info("[Nebius] Auto-selected model:", resolvedModel);
+      return resolvedModel;
+    }
+  }
+
+  resolvedModel = available[0];
+  console.info("[Nebius] Auto-selected model:", resolvedModel);
+  return resolvedModel;
+}
+
+async function requestChatCompletion(
+  config: NebiusConfig,
+  model: string,
+  messages: ChatMessage[],
+  options?: { temperature?: number; maxTokens?: number }
+): Promise<{ content: string | null; status: number; errorText: string }> {
+  const response = await fetch(`${config.endpoint}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: options?.temperature ?? 0.2,
+      max_tokens: options?.maxTokens ?? 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    return { content: null, status: response.status, errorText: await response.text() };
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+
+  return {
+    content: data.choices?.[0]?.message?.content?.trim() ?? null,
+    status: response.status,
+    errorText: "",
+  };
+}
+
 export async function nebiusChatCompletion(
   messages: ChatMessage[],
   options?: { temperature?: number; maxTokens?: number }
@@ -37,31 +129,24 @@ export async function nebiusChatCompletion(
   if (!config) return null;
 
   try {
-    const response = await fetch(`${config.endpoint}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        temperature: options?.temperature ?? 0.2,
-        max_tokens: options?.maxTokens ?? 1024,
-      }),
-    });
+    let model = await resolveNebiusModel(config);
+    let result = await requestChatCompletion(config, model, messages, options);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[Nebius] API error:", response.status, errorText);
+    if (
+      result.status === 404 &&
+      result.errorText.includes("does not exist")
+    ) {
+      resolvedModel = null;
+      model = await resolveNebiusModel(config);
+      result = await requestChatCompletion(config, model, messages, options);
+    }
+
+    if (!result.content) {
+      console.error("[Nebius] API error:", result.status, result.errorText);
       return null;
     }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-
-    return data.choices?.[0]?.message?.content?.trim() ?? null;
+    return result.content;
   } catch (error) {
     console.error("[Nebius] request failed:", error);
     return null;

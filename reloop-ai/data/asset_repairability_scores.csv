@@ -1,0 +1,5 @@
+category,avg_repairability_score,avg_failure_rate_pct,avg_lifespan_years
+laptop,6.5,12,6
+monitor,8.0,5,8
+switch,7.2,7,10
+server,5.8,15,7

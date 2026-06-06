@@ -1,0 +1,6 @@
+asset_id,category,condition,age_years,location
+LAP-001,laptop,B,3,Camden
+LAP-002,laptop,C,5,Hackney
+MON-010,monitor,A,2,Southwark
+SW-003,switch,B,4,Westminster
+SRV-001,server,C,6,Tower Hamlets
