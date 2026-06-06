@@ -1,0 +1,47 @@
+{
+  "metadata": {
+    "source": "London Datastore (demo subset)",
+    "region": "Greater London",
+    "updated": "2025-12"
+  },
+  "recyclingRates": {
+    "boroughAverage": 0.34,
+    "topPerformers": [
+      { "borough": "Bromley", "rate": 0.49 },
+      { "borough": "Bexley", "rate": 0.47 },
+      { "borough": "Havering", "rate": 0.45 }
+    ],
+    "ewasteRecoveryPotential": 0.62
+  },
+  "householdWaste": {
+    "annualTonnesPerCapita": 0.39,
+    "commercialEwasteTonnes": 42000,
+    "itEquipmentShare": 0.18
+  },
+  "carbonEmissions": {
+    "boroughAverageTCO2PerCapita": 4.2,
+    "itLifecycleEmissionsKgPerDevice": {
+      "laptop": 350,
+      "monitor": 120,
+      "switch": 85,
+      "server": 890
+    },
+    "reuseSavingsMultiplier": 0.78
+  },
+  "airQuality": {
+    "pm25AnnualMeanUgM3": 10.2,
+    "no2AnnualMeanUgM3": 28.4,
+    "ewasteIncinerationPM25KgPerTon": 2.1
+  },
+  "energyEfficiency": {
+    "averageEpcRating": "C",
+    "modernDeviceEfficiencyGainPercent": 35,
+    "refurbishedVsNewCarbonRatio": 0.22
+  },
+  "destinations": {
+    "schools": ["City Academy Hackney", "Southwark Learning Trust", "Newham Collegiate"],
+    "charities": ["Restart Project London", "Computers for Charities", "Mer-IT"],
+    "refurbishers": ["Circular Computing London", "TechTakeback", "Re-Tek UK"],
+    "recyclers": ["London Waste Recycling", "Veolia Southwark MRF", "Environcom"]
+  }
+}
