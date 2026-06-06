@@ -47,12 +47,39 @@ export async function runReflectionAgent(ctx: AgentContext): Promise<AgentContex
     ["reuse", "repair", "donate"].includes(o.action)
   ).length;
 
-  ctx.reflection =
+  const fallbackReflection =
     lowConf.length > 0
       ? `Reflection: ${lowConf.length} groups flagged for secondary review. Overall strategy prioritises circular outcomes with ${reuseCount}/${ctx.circular.length} groups routed away from landfill.`
       : `Reflection: High consensus across agents. ${reuseCount}/${ctx.circular.length} asset groups achieve circular outcomes with strong confidence.`;
 
-  ctx.timeline.push(completeStep(step, "Reflection complete — recommendations validated"));
+  const totalCarbonKg = ctx.carbon.reduce(
+    (sum, entry) => sum + ((entry.carbonSavedKg as number) ?? 0),
+    0
+  );
+  const totalValueGBP = ctx.economic.reduce(
+    (sum, entry) => sum + ((entry.resaleValueGBP as number) ?? 0),
+    0
+  );
+
+  const { nebiusReflection } = await import("@/lib/llm/nebius");
+  const nebiusText = await nebiusReflection({
+    inventoryCount: ctx.inventory.length,
+    reuseCount,
+    lowConfidenceCount: lowConf.length,
+    totalCarbonKg,
+    totalValueGBP,
+  });
+
+  ctx.reflection = nebiusText ? `Nebius reflection: ${nebiusText}` : fallbackReflection;
+
+  ctx.timeline.push(
+    completeStep(
+      step,
+      nebiusText
+        ? "Reflection complete via Nebius cloud inference"
+        : "Reflection complete — recommendations validated"
+    )
+  );
   return ctx;
 }
 

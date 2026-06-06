@@ -64,9 +64,13 @@ export async function runCarbonAgent(ctx: AgentContext): Promise<AgentContext> {
   await simulateAgentDelay(400);
 
   const { estimateCarbonForItem } = await import("@/lib/simulation/londonData");
+  const { nebiusCarbonAnalysis } = await import("@/lib/llm/nebius");
+
+  const localEstimates = ctx.inventory.map((item) => estimateCarbonForItem(item));
+  const nebius = await nebiusCarbonAnalysis(ctx.inventory, localEstimates);
 
   ctx.carbon = ctx.inventory.map((item, idx) => {
-    const saved = estimateCarbonForItem(item);
+    const saved = nebius.estimates[idx] ?? localEstimates[idx];
     const opt = ctx.circular[idx];
     if (opt) opt.carbonSavedKg = saved;
     return {
@@ -74,16 +78,11 @@ export async function runCarbonAgent(ctx: AgentContext): Promise<AgentContext> {
       quantity: item.quantity,
       carbonSavedKg: saved,
       landfillAvoidedKg: Math.round(saved * 0.04),
+      source: nebius.status === "live" ? "nebius" : "local",
     };
   });
 
-  const totalCarbon = ctx.carbon.reduce(
-    (s, c) => s + (c.carbonSavedKg as number),
-    0
-  );
-  ctx.timeline.push(
-    completeStep(step, `Carbon forecast: ${totalCarbon.toLocaleString()} kg CO₂ saved vs disposal`)
-  );
+  ctx.timeline.push(completeStep(step, nebius.summary));
   return ctx;
 }
 
