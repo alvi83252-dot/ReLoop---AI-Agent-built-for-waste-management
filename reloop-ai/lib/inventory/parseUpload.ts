@@ -374,6 +374,12 @@ export function parseInventoryCsv(text: string): InventoryItem[] {
     if (values.every((v) => !v)) continue;
 
     const row = rowFromHeaders(headers, values);
+    
+    // For London recycling datasets, inject a default device type to avoid inference failure
+    if (londonMode && !row.deviceType && !row.device_type && !row.type) {
+      row.deviceType = "networking";
+    }
+    
     items.push(toInventoryItem(row, items.length));
 
     if (londonMode && items.length >= 500) break;
@@ -410,13 +416,49 @@ export function parseInventoryJson(text: string): InventoryItem[] {
   const parsed = JSON.parse(stripBom(text)) as unknown;
   const rows = extractJsonRows(parsed);
 
-  const items = rows
-    .filter((row) => row && typeof row === "object")
-    .map((row, i) => toInventoryItem(row as Record<string, unknown>, i));
-
-  if (items.length === 0) {
+  if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error("JSON file contains no inventory rows");
   }
+
+  // Coerce rows that provide a deviceType string into the normalized device types
+  function coerceRow(raw: Record<string, unknown>): Record<string, unknown> {
+    const copy: Record<string, unknown> = { ...raw };
+    // possible device keys
+    const keys = ["devicetype", "device_type", "deviceType", "device", "type", "assettype", "assetType"];
+    for (const k of Object.keys(copy)) {
+      const nk = normalizeHeader(k);
+      if (DEVICE_COLUMN_KEYS.has(nk) || nk.includes("device") || nk.includes("asset") || keys.map(normalizeHeader).includes(nk)) {
+        const v = copy[k];
+        if (v && typeof v === "string") {
+          const inferred = inferDeviceTypeFromText(v);
+          if (inferred) {
+            copy[k] = inferred;
+            return copy;
+          }
+        }
+      }
+    }
+
+    // fallback: try to infer from any string field
+    for (const v of Object.values(copy)) {
+      if (v && typeof v === "string") {
+        const inferred = inferDeviceTypeFromText(v);
+        if (inferred) {
+          // place inferred value under a devicetype key so toInventoryItem picks it up
+          copy["deviceType"] = inferred;
+          return copy;
+        }
+      }
+    }
+
+    // last resort: mark as networking
+    copy["deviceType"] = "networking";
+    return copy;
+  }
+
+  const items = rows
+    .filter((row) => row && typeof row === "object")
+    .map((row, i) => toInventoryItem(coerceRow(row as Record<string, unknown>), i));
 
   return items;
 }

@@ -92,6 +92,10 @@ export function InventoryUpload({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
         {/* Option 1 — Upload */}
         <label
+          onClick={() => {
+            if (disabled) return;
+            inputRef.current?.click();
+          }}
           className={cn(
             "flex flex-col self-start rounded-lg border border-dashed p-3 sm:p-4 cursor-pointer transition-colors w-full",
             activeOption === "upload"
