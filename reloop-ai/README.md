@@ -21,8 +21,48 @@ If you want to override the DGX orchestration endpoint, set `NEXT_PUBLIC_DGX_ORC
 ```bash
 cd services/ai-service
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --port 8001
 ```
+
+## Voice Agent (ElevenLabs + NemoClaw / OpenClaw)
+
+### 1. Sandbox setup (run on host)
+
+```bash
+nemoclaw abdi exec python3 -m venv /home/sandbox/voice_agent/venv
+nemoclaw abdi exec /home/sandbox/voice_agent/venv/bin/pip install elevenlabs sounddevice soundfile
+```
+
+Copy `agents/voice_agent/` into the sandbox at `/home/sandbox/voice_agent/`.
+
+### 2. Environment variables
+
+Create `.env.local` (frontend) or export on the host:
+
+```bash
+export ELEVEN_API_KEY=your_key_here
+export ELEVEN_VOICE_ID=21m00Tcm4TlvDq8ikWAM
+```
+
+### 3. Start backend + launch agent
+
+```bash
+cd reloop-ai
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload --port 8000
+```
+
+```bash
+curl -X POST http://localhost:8000/voice-agent/start
+```
+
+This launches the 75-minute session inside sandbox `abdi` via:
+
+`nemoclaw abdi exec /home/sandbox/voice_agent/venv/bin/python3 /home/sandbox/voice_agent/run_voice_agent.py`
+
+For local dev without nemoclaw: `VOICE_AGENT_LOCAL=true curl -X POST http://localhost:8000/voice-agent/start`
+
+Session logs append to `agents/voice_agent/session_log.jsonl`.
 
 ## Architecture
 

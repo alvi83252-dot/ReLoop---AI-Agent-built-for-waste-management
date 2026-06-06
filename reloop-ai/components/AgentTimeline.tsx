@@ -34,7 +34,7 @@ export function AgentTimeline({ steps }: { steps: AgentStep[] }) {
         const Icon = layerIcons[step.layer];
         return (
           <motion.div
-            key={step.id}
+            key={`${step.id}-${i}`}
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.05 }}

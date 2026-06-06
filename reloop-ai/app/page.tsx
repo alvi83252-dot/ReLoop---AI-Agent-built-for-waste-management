@@ -7,7 +7,6 @@ import {
   Loader2,
   Recycle,
   ChevronRight,
-  Upload,
 } from "lucide-react";
 import { AgentTimeline } from "@/components/AgentTimeline";
 import { ImpactCounter } from "@/components/ImpactCounter";
@@ -18,9 +17,10 @@ import { EnvironmentalChart } from "@/components/EnvironmentalChart";
 import { VoiceAgent } from "@/components/VoiceAgent";
 import { KnowledgeGraphViz } from "@/components/KnowledgeGraphViz";
 import { LondonDataPanel } from "@/components/LondonDataPanel";
-import { DEMO_INVENTORY, DEMO_COMPANY } from "@/lib/data/demoInventory";
+import { InventoryUpload } from "@/components/InventoryUpload";
+import { DEMO_COMPANY } from "@/lib/data/demoInventory";
 import { edgeDGXRouter } from "@/lib/edge-dgx-router";
-import type { PipelineResult } from "@/lib/types";
+import type { InventoryItem, PipelineResult } from "@/lib/types";
 
 export default function ReLoopDashboard() {
   const [loading, setLoading] = useState(false);
@@ -29,6 +29,10 @@ export default function ReLoopDashboard() {
   const [activeArchStep, setActiveArchStep] = useState(-1);
   const [edgeActive, setEdgeActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [inventorySource, setInventorySource] = useState<"demo" | "upload" | null>(null);
+  const [inventoryLabel, setInventoryLabel] = useState<string | null>(null);
+  const [nemoclawStatus, setNemoclawStatus] = useState<string | null>(null);
 
   const runAnalysis = useCallback(async () => {
     setLoading(true);
@@ -37,9 +41,23 @@ export default function ReLoopDashboard() {
     setActiveArchStep(0);
     setEdgeActive(true);
     setError(null);
+    setNemoclawStatus(null);
 
     try {
-      const pipelineResult = await edgeDGXRouter.runFullLoop(DEMO_INVENTORY);
+      const pipelineResult = await edgeDGXRouter.runFullLoop(
+        inventory,
+        inventorySource ?? "demo"
+      );
+
+      const nemoclaw = (pipelineResult as PipelineResult & {
+        nemoclaw?: { usedNemoclaw: boolean; source: string; insight: string };
+      }).nemoclaw;
+
+      if (nemoclaw?.usedNemoclaw) {
+        setNemoclawStatus(`Analysis enriched by NemoClaw (${nemoclaw.source})`);
+      } else {
+        setNemoclawStatus("NemoClaw unavailable — local agent pipeline used");
+      }
 
       for (let i = 0; i < pipelineResult.timeline.length; i++) {
         setLiveSteps(pipelineResult.timeline.slice(0, i + 1));
@@ -54,14 +72,15 @@ export default function ReLoopDashboard() {
         err instanceof Error ? err.message : "Unexpected orchestration error";
       console.error(message, err);
       setError(message);
+      console.error(err);
+      setNemoclawStatus(err instanceof Error ? err.message : "Analysis failed");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [inventory, inventorySource]);
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -82,12 +101,16 @@ export default function ReLoopDashboard() {
                 Demo Mode — No API keys required
               </span>
             )}
+            {nemoclawStatus && (
+              <span className="text-xs rounded-full border border-green-500/30 bg-green-500/10 text-green-400 px-3 py-1">
+                {nemoclawStatus}
+              </span>
+            )}
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        {/* Hero + CTA */}
         <section className="grid lg:grid-cols-2 gap-8 items-start">
           <div>
             {error && (
@@ -104,33 +127,33 @@ export default function ReLoopDashboard() {
             </motion.h2>
             <p className="text-zinc-400 mt-4 leading-relaxed">
               {DEMO_COMPANY.name} plans to dispose of enterprise IT assets.
-              ReLoop&apos;s multi-agent system analyses, optimises, and redirects
-              them before they become waste — powered by NVIDIA edge + DGX compute.
+              Upload your inventory CSV/JSON or generate dummy demo data — then run
+              analysis via NemoClaw + Nemotron and the ZGX → DGX → ZGX agent loop.
             </p>
 
-            <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-              <h3 className="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
-                <Upload className="h-4 w-4" /> Demo Inventory
-              </h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                {DEMO_INVENTORY.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex justify-between rounded-lg bg-zinc-800/50 px-3 py-2"
-                  >
-                    <span className="text-zinc-400 capitalize">{item.deviceType}s</span>
-                    <span className="font-mono text-emerald-400">{item.quantity}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-zinc-500 mt-3">
-                {DEMO_COMPANY.borough}, London · {DEMO_COMPANY.employees} employees
-              </p>
+            <div className="mt-6">
+              <InventoryUpload
+                disabled={loading}
+                onInventoryChange={(items, source, label) => {
+                  setInventory(items);
+                  setInventorySource(source);
+                  setInventoryLabel(label);
+                  setResult(null);
+                }}
+              />
             </div>
+
+            {inventoryLabel && (
+              <p className="text-xs text-emerald-400/80 mt-3">{inventoryLabel}</p>
+            )}
+
+            <p className="text-xs text-zinc-500 mt-3">
+              {DEMO_COMPANY.borough}, London · {DEMO_COMPANY.employees} employees
+            </p>
 
             <button
               onClick={runAnalysis}
-              disabled={loading}
+              disabled={loading || inventory.length === 0 || !inventorySource}
               className="mt-6 flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
             >
               {loading ? (
@@ -138,7 +161,11 @@ export default function ReLoopDashboard() {
               ) : (
                 <Play className="h-5 w-5" />
               )}
-              {loading ? "Running ZGX → DGX → ZGX Loop..." : "Run Recovery Analysis"}
+              {loading
+                ? "Running NemoClaw + ZGX → DGX → ZGX..."
+                : inventorySource
+                  ? "Run Recovery Analysis"
+                  : "Choose upload or demo data first"}
             </button>
           </div>
 
@@ -150,7 +177,6 @@ export default function ReLoopDashboard() {
           </div>
         </section>
 
-        {/* Sponsors */}
         <section>
           <h3 className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-3">
             Sponsor Integrations
@@ -158,7 +184,6 @@ export default function ReLoopDashboard() {
           <SponsorBadges />
         </section>
 
-        {/* Live timeline */}
         {(loading || liveSteps.length > 0) && (
           <section>
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -169,7 +194,6 @@ export default function ReLoopDashboard() {
           </section>
         )}
 
-        {/* Results */}
         {result && (
           <motion.section
             initial={{ opacity: 0 }}
@@ -196,9 +220,10 @@ export default function ReLoopDashboard() {
             <KnowledgeGraphViz graph={result.knowledgeGraph} />
 
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-500">
-              <strong className="text-zinc-300">System loop complete:</strong> ZGX Nano edge scan →
-              DGX Spark multi-agent orchestration → Decision synthesis → ZGX edge execution →
-              Reports + voice output. Cloud backup via Nebius available when configured.
+              <strong className="text-zinc-300">System loop complete:</strong>{" "}
+              Inventory {inventorySource === "upload" ? "uploaded" : "dummy demo"} →
+              NemoClaw/Nemotron → ZGX Nano edge scan → DGX Spark orchestration →
+              edge execution → reports + voice output.
             </div>
           </motion.section>
         )}

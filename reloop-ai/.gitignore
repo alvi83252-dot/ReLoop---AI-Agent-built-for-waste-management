@@ -33,6 +33,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# voice agent session logs
+agents/voice_agent/session_log.jsonl
+data/voice_session_log.jsonl
+**/session_log.jsonl
+
 # vercel
 .vercel
 
