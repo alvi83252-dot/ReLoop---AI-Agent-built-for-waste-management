@@ -34,6 +34,15 @@ yarn-error.log*
 .env*
 !.env.example
 
+# voice agent session logs
+agents/voice_agent/session_log.jsonl
+data/voice_session_log.jsonl
+**/session_log.jsonl
+
+# python
+__pycache__/
+*.py[cod]
+
 # vercel
 .vercel
 
