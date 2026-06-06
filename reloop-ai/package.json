@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 10.18.216.23 --port 3000",
-    "dev": "node scripts/dev.mjs",
+    "dev": "next dev --webpack --hostname 0.0.0.0 --port 3000",
     "dev:plain": "next dev",
-    "build": "next build",
-    "start": "next start --hostname 0.0.0.0",
+    "dev:dgx": "next dev --webpack --hostname 0.0.0.0 --port 3000",
+    "demo": "npm run build && next start --hostname 0.0.0.0 --port 3000",
+    "build": "next build --webpack",
+    "start": "next start --hostname 0.0.0.0 --port 3000",
     "lint": "eslint"
   },
   "dependencies": {

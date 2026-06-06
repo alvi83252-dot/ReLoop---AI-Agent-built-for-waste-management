@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Volume2, Loader2, AlertCircle, History, HardDrive } from "lucide-react";
 import {
   appendLocalSessionLogs,
@@ -42,16 +42,14 @@ export function VoiceAgent({ text }: { text: string }) {
   const [speaking, setSpeaking] = useState(false);
   const [mode, setMode] = useState<"elevenlabs" | "demo">("elevenlabs");
   const [error, setError] = useState<string | null>(null);
-  const [memory, setMemory] = useState<VoiceMemoryView | null>(null);
-
-  const refreshMemory = useCallback(async () => {
-    const view = await loadMergedMemory();
-    setMemory(view);
-  }, []);
+  const [memory, setMemory] = useState<VoiceMemoryView | null>(() => {
+    if (typeof window === "undefined") return null;
+    return buildMemoryView(loadLocalSessionLogs());
+  });
 
   useEffect(() => {
-    refreshMemory();
-  }, [refreshMemory]);
+    void loadMergedMemory().then(setMemory);
+  }, []);
 
   async function speak() {
     if (!text || speaking) return;
@@ -90,7 +88,7 @@ export function VoiceAgent({ text }: { text: string }) {
         const audio = new Audio(data.audio);
         audio.onended = () => {
           setSpeaking(false);
-          refreshMemory();
+          void loadMergedMemory().then(setMemory);
         };
         audio.onerror = () => {
           setSpeaking(false);

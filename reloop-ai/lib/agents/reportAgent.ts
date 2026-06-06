@@ -18,7 +18,6 @@ export async function runReportAgent(
   await simulateAgentDelay(350);
 
   const totalDevices = ctx.inventory.reduce((s, i) => s + i.quantity, 0);
-  const rescued = ctx.circular.filter((o) => o.action !== "recycle").length;
   const carbonSaved = ctx.circular.reduce((s, o) => s + o.carbonSavedKg, 0);
   const valueRecovered = ctx.circular.reduce((s, o) => s + o.valueRecoveredGBP, 0);
   const landfillAvoided = ctx.inventory.reduce(

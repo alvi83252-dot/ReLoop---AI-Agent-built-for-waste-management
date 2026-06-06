@@ -1,4 +1,4 @@
-import type { AgentContext, OptimizationResult, RecoveryAction } from "@/lib/types";
+import type { AgentContext, RecoveryAction } from "@/lib/types";
 import { OptimizationResultSchema } from "@/lib/types";
 import { pickDestination } from "@/lib/simulation/londonData";
 import { completeStep, createStep, simulateAgentDelay } from "./utils";
