@@ -21,7 +21,8 @@ import { resetStepCounter } from "./utils";
 import { buildKnowledgeGraph } from "@/lib/graph/knowledgeGraph";
 
 export async function runAgentPipeline(
-  inventory: InventoryItem[]
+  inventory: InventoryItem[],
+  options?: { source?: "demo" | "upload" }
 ): Promise<PipelineResult> {
   resetStepCounter();
 
@@ -76,7 +77,7 @@ export async function runAgentPipeline(
     summary,
     reports,
     knowledgeGraph,
-    voiceSummary: buildVoiceSummary(finalCtx),
+    voiceSummary: buildVoiceSummary(finalCtx, options?.source ?? "demo"),
     sponsors: {
       edge: "HP ZGX Nano AI Station",
       core: "NVIDIA DGX Spark",

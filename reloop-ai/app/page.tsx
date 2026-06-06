@@ -18,9 +18,16 @@ import { VoiceAgent } from "@/components/VoiceAgent";
 import { KnowledgeGraphViz } from "@/components/KnowledgeGraphViz";
 import { LondonDataPanel } from "@/components/LondonDataPanel";
 import { InventoryUpload } from "@/components/InventoryUpload";
+import { HardwareStatusBar } from "@/components/HardwareStatusBar";
 import { DEMO_COMPANY } from "@/lib/data/demoInventory";
 import { edgeDGXRouter } from "@/lib/edge-dgx-router";
 import type { InventoryItem, PipelineResult } from "@/lib/types";
+
+type HardwareLoopMeta = {
+  edgeTier: "zgx" | "local";
+  dgxTier: "dgx" | "local";
+  executionTier: "zgx" | "local";
+};
 
 export default function ReLoopDashboard() {
   const [loading, setLoading] = useState(false);
@@ -31,7 +38,6 @@ export default function ReLoopDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [inventorySource, setInventorySource] = useState<"demo" | "upload" | null>(null);
-  const [inventoryLabel, setInventoryLabel] = useState<string | null>(null);
   const [nemoclawStatus, setNemoclawStatus] = useState<string | null>(null);
 
   const runAnalysis = useCallback(async () => {
@@ -47,16 +53,23 @@ export default function ReLoopDashboard() {
       const pipelineResult = await edgeDGXRouter.runFullLoop(
         inventory,
         inventorySource ?? "demo"
-      );
-
-      const nemoclaw = (pipelineResult as PipelineResult & {
+      ) as PipelineResult & {
+        hardware?: HardwareLoopMeta;
         nemoclaw?: { usedNemoclaw: boolean; source: string; insight: string };
-      }).nemoclaw;
+      };
 
-      if (nemoclaw?.usedNemoclaw) {
-        setNemoclawStatus(`Analysis enriched by NemoClaw (${nemoclaw.source})`);
+      const hw = pipelineResult.hardware;
+      if (hw) {
+        setNemoclawStatus(
+          `Loop: ZGX ${hw.edgeTier === "zgx" ? "live" : "local"} → DGX ${hw.dgxTier === "dgx" ? "live" : "local"} → ZGX ${hw.executionTier === "zgx" ? "live" : "local"}`
+        );
       } else {
-        setNemoclawStatus("NemoClaw unavailable — local agent pipeline used");
+        const nemoclaw = pipelineResult.nemoclaw;
+        if (nemoclaw?.usedNemoclaw) {
+          setNemoclawStatus(`Analysis enriched by NemoClaw (${nemoclaw.source})`);
+        } else {
+          setNemoclawStatus("Local agent pipeline (configure ZGX/DGX URLs for hardware mode)");
+        }
       }
 
       for (let i = 0; i < pipelineResult.timeline.length; i++) {
@@ -82,19 +95,21 @@ export default function ReLoopDashboard() {
   return (
     <div className="min-h-screen bg-black text-white">
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <Recycle className="h-7 w-7 text-emerald-400" />
-              <h1 className="text-2xl font-bold tracking-tight">
+              <Recycle className="h-6 w-6 sm:h-7 sm:w-7 text-emerald-400 shrink-0" />
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">
                 ReLoop <span className="text-emerald-400">AI</span>
               </h1>
             </div>
-            <p className="text-sm text-zinc-400 mt-1">
+            <p className="text-xs sm:text-sm text-zinc-400 mt-1">
               Before waste becomes waste, ReLoop finds its next life.
             </p>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto">
+            <HardwareStatusBar />
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-start sm:justify-end w-full">
             <EdgeBadge active={edgeActive} />
             {result?.demoMode && (
               <span className="text-xs rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400 px-3 py-1">
@@ -106,10 +121,12 @@ export default function ReLoopDashboard() {
                 {nemoclawStatus}
               </span>
             )}
+            </div>
           </div>
         </div>
       </header>
 
+<<<<<<< HEAD
       <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
         <section className="grid lg:grid-cols-2 gap-8 items-start">
           <div>
@@ -118,34 +135,34 @@ export default function ReLoopDashboard() {
                 <strong className="font-semibold">Analysis failed:</strong> {error}
               </div>
             )}
+=======
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
+          <div className="min-w-0">
+>>>>>>> origin/main
             <motion.h2
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-3xl font-bold leading-tight"
+              className="text-2xl sm:text-3xl font-bold leading-tight"
             >
               Autonomous circular-economy intelligence for London
             </motion.h2>
-            <p className="text-zinc-400 mt-4 leading-relaxed">
+            <p className="text-sm sm:text-base text-zinc-400 mt-3 sm:mt-4 leading-relaxed">
               {DEMO_COMPANY.name} plans to dispose of enterprise IT assets.
-              Upload your inventory CSV/JSON or generate dummy demo data — then run
+              Upload your inventory CSV/JSON or London recycling data — then run
               analysis via NemoClaw + Nemotron and the ZGX → DGX → ZGX agent loop.
             </p>
 
             <div className="mt-6">
               <InventoryUpload
                 disabled={loading}
-                onInventoryChange={(items, source, label) => {
+                onInventoryChange={(items, source) => {
                   setInventory(items);
                   setInventorySource(source);
-                  setInventoryLabel(label);
                   setResult(null);
                 }}
               />
             </div>
-
-            {inventoryLabel && (
-              <p className="text-xs text-emerald-400/80 mt-3">{inventoryLabel}</p>
-            )}
 
             <p className="text-xs text-zinc-500 mt-3">
               {DEMO_COMPANY.borough}, London · {DEMO_COMPANY.employees} employees
@@ -154,7 +171,7 @@ export default function ReLoopDashboard() {
             <button
               onClick={runAnalysis}
               disabled={loading || inventory.length === 0 || !inventorySource}
-              className="mt-6 flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+              className="mt-6 flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 sm:px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
             >
               {loading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -169,7 +186,7 @@ export default function ReLoopDashboard() {
             </button>
           </div>
 
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4 min-w-0 overflow-hidden">
             <h3 className="text-sm font-medium text-zinc-400 mb-2 text-center">
               System Architecture
             </h3>
@@ -205,12 +222,18 @@ export default function ReLoopDashboard() {
               <ImpactCounter summary={result.summary} />
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-6">
-              <VoiceAgent text={result.voiceSummary} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              <VoiceAgent
+                key={`voice-${inventorySource ?? "none"}-${result.summary.totalDevices}-${result.voiceSummary.length}`}
+                text={result.voiceSummary}
+              />
               <LondonDataPanel />
             </div>
 
-            <EnvironmentalChart optimizations={result.optimizations} />
+            <EnvironmentalChart
+              inventory={result.inventory}
+              optimizations={result.optimizations}
+            />
 
             <div>
               <h3 className="text-lg font-semibold mb-4">Recovery Reports</h3>
