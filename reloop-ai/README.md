@@ -4,6 +4,8 @@
 
 Autonomous circular-economy intelligence platform for the NVIDIA Hack for Impact London hackathon.
 
+Branding: header logo and favicon use `public/reloop-logo.png` — *ReLoop AI · Before waste becomes waste*.
+
 ## Quick Start
 
 ```bash
@@ -143,7 +145,16 @@ npm run dev
 
 4. Open [http://localhost:3000](http://localhost:3000), click **Run Recovery Analysis**, and check the agent timeline for Nebius-powered steps.
 
-> **Model ID:** Copy an exact model ID from your Nebius **Models** page. If the model name is wrong, Nebius calls fail silently and ReLoop falls back to local logic.
+> **Model ID:** Optional — if omitted or invalid, ReLoop auto-selects an available model from your Nebius account. Local London logic is used as fallback if the API is unavailable.
+
+### Live confirmation
+
+When Nebius is working, check for:
+
+- Agent timeline: **Cloud Offload — Nebius** and **Reflection complete via Nebius cloud inference**
+- API response from `POST /api/dgx/orchestrate`: `"nebiusBackup": { "status": "live", ... }`
+
+Run `node --use-system-ca scripts/verify-nebius.mjs` to test the API key outside the UI.
 
 ### Code locations
 
@@ -153,6 +164,7 @@ npm run dev
 | `lib/agents/circularAgent.ts` | Carbon Impact Agent → calls Nebius |
 | `lib/agents/riskAgent.ts` | Reflection Agent → calls Nebius |
 | `app/api/dgx/orchestrate/route.ts` | Pipeline orchestration + Nebius backup response |
+| `scripts/verify-nebius.mjs` | CLI check for Nebius API key and model access |
 
 ### Pitch line (judges / demo)
 

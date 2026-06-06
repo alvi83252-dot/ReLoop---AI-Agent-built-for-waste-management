@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   Play,
   Loader2,
-  Recycle,
   ChevronRight,
 } from "lucide-react";
 import { AgentTimeline } from "@/components/AgentTimeline";
@@ -78,15 +78,14 @@ export default function ReLoopDashboard() {
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <Recycle className="h-7 w-7 text-emerald-400" />
-              <h1 className="text-2xl font-bold tracking-tight">
-                ReLoop <span className="text-emerald-400">AI</span>
-              </h1>
-            </div>
-            <p className="text-sm text-zinc-400 mt-1">
-              Before waste becomes waste, ReLoop finds its next life.
-            </p>
+            <Image
+              src="/reloop-logo.png"
+              alt="ReLoop AI — Before waste becomes waste"
+              width={420}
+              height={160}
+              className="h-16 sm:h-20 w-auto object-contain object-left"
+              priority
+            />
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <EdgeBadge active={edgeActive} />
