@@ -28,6 +28,7 @@ export default function ReLoopDashboard() {
   const [liveSteps, setLiveSteps] = useState<PipelineResult["timeline"]>([]);
   const [activeArchStep, setActiveArchStep] = useState(-1);
   const [edgeActive, setEdgeActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const runAnalysis = useCallback(async () => {
     setLoading(true);
@@ -35,6 +36,7 @@ export default function ReLoopDashboard() {
     setLiveSteps([]);
     setActiveArchStep(0);
     setEdgeActive(true);
+    setError(null);
 
     try {
       const pipelineResult = await edgeDGXRouter.runFullLoop(DEMO_INVENTORY);
@@ -48,7 +50,10 @@ export default function ReLoopDashboard() {
       setResult(pipelineResult);
       setActiveArchStep(8);
     } catch (err) {
-      console.error(err);
+      const message =
+        err instanceof Error ? err.message : "Unexpected orchestration error";
+      console.error(message, err);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -85,6 +90,11 @@ export default function ReLoopDashboard() {
         {/* Hero + CTA */}
         <section className="grid lg:grid-cols-2 gap-8 items-start">
           <div>
+            {error && (
+              <div className="rounded-xl border border-red-700 bg-red-950/70 px-4 py-3 text-sm text-red-300 mb-4">
+                <strong className="font-semibold">Analysis failed:</strong> {error}
+              </div>
+            )}
             <motion.h2
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}

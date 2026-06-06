@@ -22,18 +22,29 @@ export class EdgeDGXRouter {
     }));
   }
 
+  private getOrchestrateUrl() {
+    return (
+      process.env.NEXT_PUBLIC_DGX_ORCHESTRATE_URL ??
+      "/api/dgx/orchestrate"
+    );
+  }
+
   async sendToDGX(payload: {
     assets: AssetPayload[];
     inventory: InventoryItem[];
   }): Promise<PipelineResult> {
-    const response = await fetch("/api/dgx/orchestrate", {
+    const url = this.getOrchestrateUrl();
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
-      throw new Error("DGX orchestration failed");
+      const body = await response.text();
+      throw new Error(
+        `DGX orchestration failed (${response.status}): ${body || "no response body"}`
+      );
     }
 
     return response.json();

@@ -12,7 +12,9 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and click **Run Recovery Analysis**. Works fully in demo mode without API keys.
+Open [http://localhost:3000](http://localhost:3000) or `http://<DGX_HOST_IP>:3000` and click **Run Recovery Analysis**. The dev server is configured to bind to `0.0.0.0` so it can be reached from another machine on the same network.
+
+If you want to override the DGX orchestration endpoint, set `NEXT_PUBLIC_DGX_ORCHESTRATE_URL` to the full path of your API host.
 
 ## Optional: Python AI Service (PyTorch)
 
