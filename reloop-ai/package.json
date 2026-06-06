@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS='--no-warnings' next dev --hostname 0.0.0.0 --turbopack-watch-mode=false",
+    "dev": "next dev --hostname 0.0.0.0 --port 3000 --turbo",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "lint": "eslint"
