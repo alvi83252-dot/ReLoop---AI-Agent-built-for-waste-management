@@ -126,20 +126,9 @@ export default function ReLoopDashboard() {
         </div>
       </header>
 
-<<<<<<< HEAD
-      <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        <section className="grid lg:grid-cols-2 gap-8 items-start">
-          <div>
-            {error && (
-              <div className="rounded-xl border border-red-700 bg-red-950/70 px-4 py-3 text-sm text-red-300 mb-4">
-                <strong className="font-semibold">Analysis failed:</strong> {error}
-              </div>
-            )}
-=======
       <main className="max-w-7xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6 sm:space-y-8">
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
           <div className="min-w-0">
->>>>>>> origin/main
             <motion.h2
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
