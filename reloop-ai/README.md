@@ -14,13 +14,40 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) and click **Run Recovery Analysis**. Works fully in demo mode without API keys.
 
-## Optional: Python AI Service (PyTorch)
+## ZGX Nano + DGX Spark hardware loop
+
+ReLoop routes analysis through **edge → core → edge** when hardware URLs are configured.
+
+### 1. Start ZGX edge service (HP ZGX Nano / port 8001)
 
 ```bash
 cd services/ai-service
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8001
 ```
+
+### 2. Start DGX orchestrator (DGX Spark / port 8002)
+
+```bash
+cd services/dgx-orchestrator
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8002
+```
+
+### 3. Configure Next.js (`.env.local`)
+
+```bash
+AI_SERVICE_URL=http://localhost:8001
+DGX_ORCHESTRATOR_URL=http://localhost:8002
+```
+
+At the event, replace with real ZGX/DGX IPs. Without these URLs, ReLoop falls back to local simulation.
+
+Check status: `GET http://localhost:3000/api/hardware/status`
+
+## Optional: Python AI Service (PyTorch)
+
+Same as ZGX edge service above (`services/ai-service` on port 8001).
 
 ## Voice Agent (ElevenLabs + NemoClaw / OpenClaw)
 

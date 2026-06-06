@@ -69,7 +69,7 @@ export function ImpactCounter({ summary }: { summary: PipelineResult["summary"] 
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
       {cards.map((card, i) => (
         <motion.div
           key={card.label}
@@ -82,7 +82,7 @@ export function ImpactCounter({ summary }: { summary: PipelineResult["summary"] 
             <card.icon className="h-4 w-4" />
             {card.label}
           </div>
-          <div className="text-2xl font-bold text-white">
+          <div className="text-xl sm:text-2xl font-bold text-white break-words">
             <AnimatedNumber
               value={card.value}
               prefix={card.prefix}

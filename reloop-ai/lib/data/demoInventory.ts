@@ -118,6 +118,23 @@ export function generateDummyInventory(): InventoryItem[] {
 
 export function summarizeInventory(items: InventoryItem[]): string {
   const total = items.reduce((sum, item) => sum + item.quantity, 0);
-  const groups = items.map((i) => `${i.quantity} ${i.deviceType}s`).join(", ");
-  return `${total} devices (${groups})`;
+  const byType = new Map<string, number>();
+
+  for (const item of items) {
+    byType.set(item.deviceType, (byType.get(item.deviceType) ?? 0) + item.quantity);
+  }
+
+  const groups = Array.from(byType.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([type, qty]) => {
+      const label = qty === 1 ? type : `${type}s`;
+      return `${qty.toLocaleString()} ${label}`;
+    })
+    .join(", ");
+
+  if (items.length > byType.size) {
+    return `${total.toLocaleString()} devices (${groups}) · ${items.length} rows`;
+  }
+
+  return `${total.toLocaleString()} devices (${groups})`;
 }

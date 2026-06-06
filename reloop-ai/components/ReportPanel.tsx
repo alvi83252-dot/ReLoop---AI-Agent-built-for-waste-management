@@ -16,7 +16,7 @@ export function ReportPanel({ result }: { result: PipelineResult }) {
           className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
         >
           <h3 className="font-semibold text-emerald-400 mb-3">{tab.title}</h3>
-          <pre className="text-sm text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed">
+          <pre className="text-sm text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed max-h-56 overflow-y-auto pr-1">
             {tab.content}
           </pre>
         </div>
