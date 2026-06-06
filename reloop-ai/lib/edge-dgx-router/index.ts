@@ -25,11 +25,15 @@ export class EdgeDGXRouter {
   async sendToDGX(payload: {
     assets: AssetPayload[];
     inventory: InventoryItem[];
+    source?: "demo" | "upload";
   }): Promise<PipelineResult> {
     const response = await fetch("/api/dgx/orchestrate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        useNemoclaw: true,
+      }),
     });
 
     if (!response.ok) {
@@ -51,9 +55,12 @@ export class EdgeDGXRouter {
     };
   }
 
-  async runFullLoop(inventory: InventoryItem[]): Promise<PipelineResult> {
+  async runFullLoop(
+    inventory: InventoryItem[],
+    source: "demo" | "upload" = "demo"
+  ): Promise<PipelineResult> {
     const assets = await this.edgeScan(inventory);
-    const result = await this.sendToDGX({ assets, inventory });
+    const result = await this.sendToDGX({ assets, inventory, source });
     await this.executeEdgeDecision(result);
     return result;
   }

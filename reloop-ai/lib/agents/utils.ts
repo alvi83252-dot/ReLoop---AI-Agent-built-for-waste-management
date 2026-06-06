@@ -25,6 +25,7 @@ export function createStep(
 export function completeStep(step: AgentStep, message?: string): AgentStep {
   return {
     ...step,
+    id: `${step.id}-complete`,
     status: "complete",
     message: message ?? step.message,
   };

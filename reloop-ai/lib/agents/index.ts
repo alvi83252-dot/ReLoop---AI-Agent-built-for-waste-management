@@ -56,7 +56,7 @@ export async function runAgentPipeline(
   // Edge execution + reports
   const { ctx: finalCtx, reports } = await runReportAgent(ctx);
   const executionStep = {
-    id: "edge-exec",
+    id: `edge-exec-${Date.now()}`,
     agent: "Edge Execution Agent — ZGX Nano",
     layer: "execution" as const,
     status: "complete" as const,

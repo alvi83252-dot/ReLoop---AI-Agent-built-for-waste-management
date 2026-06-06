@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runAgentPipeline } from "@/lib/agents";
 import { nebiusBackupInference } from "@/lib/llm/nebius";
+import { analyzeInventoryWithNemoclaw } from "@/lib/nemoclaw/client";
 import type { InventoryItem } from "@/lib/types";
 import { InventoryItemSchema } from "@/lib/types";
 
@@ -15,12 +16,27 @@ export async function POST(req: Request) {
         })
     );
 
+    const useNemoclaw = data.useNemoclaw !== false;
+    const nemoclaw = useNemoclaw
+      ? await analyzeInventoryWithNemoclaw(inventory)
+      : { usedNemoclaw: false, insight: "", source: "fallback" as const };
+
     const result = await runAgentPipeline(inventory);
     const nebius = await nebiusBackupInference({ inventorySize: inventory.length });
 
+    if (nemoclaw.insight) {
+      result.reports.reflectionNotes = [
+        result.reports.reflectionNotes,
+        `NemoClaw / Nemotron analysis (${nemoclaw.source}):`,
+        nemoclaw.insight,
+      ].join("\n\n");
+    }
+
     return NextResponse.json({
       ...result,
+      nemoclaw,
       nebiusBackup: nebius,
+      inventorySource: data.source ?? "unknown",
       reasoningPath: result.timeline
         .filter((s) => s.layer === "dgx" || s.layer === "synthesis")
         .map((s) => s.message),
