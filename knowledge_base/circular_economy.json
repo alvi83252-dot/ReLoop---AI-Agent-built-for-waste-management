@@ -1,0 +1,17 @@
+{
+  "destinations": {
+    "schools": "IT equipment suitable for education — laptops, monitors",
+    "charities": "Functional devices for digital inclusion programmes",
+    "refurbishers": "Commercial refurbishment and certified resale",
+    "recyclers": "End-of-life responsible recycling with WEEE compliance"
+  },
+  "carbonFactors": {
+    "laptopReuseKg": 273,
+    "monitorReuseKg": 94,
+    "serverReuseKg": 694
+  },
+  "confidenceThresholds": {
+    "autoApprove": 0.75,
+    "manualReview": 0.65
+  }
+}
