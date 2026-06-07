@@ -41,7 +41,9 @@ export async function nebiusChatCompletion(
       temperature: options?.temperature ?? 0.4,
       max_tokens: options?.maxTokens ?? 600,
     }),
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(
+      Number(process.env.NEBIUS_TIMEOUT_MS ?? 20_000)
+    ),
   });
 
   const raw = await response.text();

@@ -50,5 +50,7 @@ export function resetStepCounter() {
 }
 
 export async function simulateAgentDelay(ms = 400): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+  const fast = process.env.ANALYSIS_FAST_MODE === "true";
+  const scaled = fast ? Math.min(ms, 80) : Math.round(ms * 0.35);
+  await new Promise((resolve) => setTimeout(resolve, scaled));
 }

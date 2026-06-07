@@ -11,7 +11,10 @@ let cachedAutoModel: string | null = null;
 export async function resolveNebiusModel(): Promise<string> {
   const { model, apiKey, baseUrl } = getNebiusConfig();
   if (!apiKey) return model;
-  if (cachedAutoModel) return cachedAutoModel;
+  if (cachedAutoModel && !/embed|embedding|rerank/i.test(cachedAutoModel)) {
+    return cachedAutoModel;
+  }
+  cachedAutoModel = null;
 
   try {
     const response = await fetch(`${baseUrl}/models`, {
@@ -26,8 +29,17 @@ export async function resolveNebiusModel(): Promise<string> {
 
     const data = (await response.json()) as { data?: Array<{ id: string }> };
     const models = data.data ?? [];
+    const chatModels = models.filter(
+      (m) =>
+        /instruct|nemotron|it$/i.test(m.id) &&
+        !/embed|embedding|rerank|vision|audio|code-interpreter/i.test(m.id)
+    );
     const preferred =
-      models.find((m) => /8b-instruct/i.test(m.id))?.id ??
+      chatModels.find((m) => /8b-instruct/i.test(m.id))?.id ??
+      chatModels.find((m) => /8b.*instruct/i.test(m.id))?.id ??
+      chatModels.find((m) => /27b|32b/i.test(m.id))?.id ??
+      chatModels.find((m) => /instruct/i.test(m.id))?.id ??
+      chatModels[0]?.id ??
       models.find((m) => /instruct/i.test(m.id))?.id ??
       models[0]?.id ??
       model;
@@ -180,9 +192,11 @@ export async function runNebiusAgentJobs(
     };
   }
 
-  const carbon = await nebiusCarbonImpactAgent(ctx);
-  const reflection = await nebiusReflectionAgent(ctx);
-  const backup = await nebiusPipelineBackup(ctx, hardwareNote);
+  const [carbon, reflection, backup] = await Promise.all([
+    nebiusCarbonImpactAgent(ctx),
+    nebiusReflectionAgent(ctx),
+    nebiusPipelineBackup(ctx, hardwareNote),
+  ]);
 
   const anyLive =
     carbon.status === "live" ||

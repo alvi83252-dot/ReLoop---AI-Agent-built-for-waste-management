@@ -16,6 +16,10 @@ import {
   loadLocalSessionLogs,
   mergeSessionLogs,
 } from "@/lib/voice/localMemory";
+import {
+  buildSessionTimeline,
+  type SessionTimelineBlock,
+} from "@/lib/voice/sessionTimeline";
 import type { VoiceLogEntry } from "@/lib/voice/types";
 import type { VoiceSessionStats } from "@/lib/voice/sessionStats";
 import { cn } from "@/lib/utils";
@@ -67,8 +71,10 @@ export function VoiceSessionMemory({
   const [stats, setStats] = useState<VoiceSessionStats | null>(null);
   const [summary, setSummary] = useState("");
   const [recent, setRecent] = useState<VoiceLogEntry[]>([]);
+  const [sessions, setSessions] = useState<SessionTimelineBlock[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [showAllSessions, setShowAllSessions] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -81,11 +87,13 @@ export function VoiceSessionMemory({
       setStats(data.stats ?? null);
       setSummary(data.summary || view.summary);
       setRecent(view.recent);
+      setSessions(buildSessionTimeline(merged));
     } catch {
       const local = loadLocalSessionLogs();
       const view = buildMemoryView(local);
       setSummary(view.summary);
       setRecent(view.recent);
+      setSessions(buildSessionTimeline(local));
     } finally {
       setLoading(false);
     }
@@ -189,11 +197,117 @@ export function VoiceSessionMemory({
         <p className="text-xs text-zinc-400 mb-4 leading-relaxed">{summary}</p>
       )}
 
+      {sessions.length > 0 ? (
+        <div className="mb-4">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h4 className="text-xs uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              Previous sessions — what was said and when
+            </h4>
+            {sessions.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setShowAllSessions((v) => !v)}
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 shrink-0"
+              >
+                {showAllSessions ? "Show fewer" : `Show all ${sessions.length}`}
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
+            {(showAllSessions ? sessions : sessions.slice(0, 3)).map((session) => {
+              const isOpen =
+                expandedSessionId === session.blockKey ||
+                (expandedSessionId === null && session.index === sessions[0]?.index);
+
+              return (
+                <div
+                  key={session.blockKey}
+                  className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden"
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedSessionId((current) =>
+                        current === session.blockKey ? null : session.blockKey
+                      )
+                    }
+                    className="w-full flex items-start justify-between gap-3 px-3 py-2.5 text-left hover:bg-zinc-900/80 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-zinc-200">
+                        Session {session.index}
+                      </p>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        Started {session.startedLabel}
+                        {session.turnCount > 0
+                          ? ` · ${session.turnCount} logged turn${session.turnCount === 1 ? "" : "s"}`
+                          : " · no conversation yet"}
+                      </p>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-600 shrink-0 pt-0.5">
+                      {isOpen ? "Hide" : "Show"}
+                    </span>
+                  </button>
+
+                  {isOpen && (
+                    <div className="border-t border-zinc-800 px-3 py-2 space-y-2">
+                      {session.lines.length === 0 ? (
+                        <p className="text-xs text-zinc-500 py-1">
+                          No prompts or replies logged in this session yet.
+                        </p>
+                      ) : (
+                        session.lines.map((line, lineIndex) => (
+                          <div
+                            key={`${session.blockKey}-${lineIndex}-${line.timestamp}`}
+                            className="rounded-md border border-zinc-800/80 bg-zinc-950/60 px-3 py-2"
+                          >
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1">
+                              <span className="text-[11px] font-mono text-emerald-400/90">
+                                {line.timeLabel}
+                              </span>
+                              <span
+                                className={cn(
+                                  "text-[10px] uppercase tracking-wider font-medium",
+                                  line.role === "user"
+                                    ? "text-sky-400"
+                                    : "text-lime-400"
+                                )}
+                              >
+                                {line.roleLabel}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                              {line.text}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-[11px] text-zinc-600 mt-3">
+            Ask the live agent: &quot;What did you say at 5:11 AM?&quot;, &quot;Was there anything at 3 PM?&quot;, or &quot;What happened in session 2?&quot;
+          </p>
+        </div>
+      ) : (
+        !loading && (
+          <p className="text-sm text-zinc-500 mb-4">
+            Previous sessions will appear here with exact timestamps once you use the live voice agent or Ask once.
+          </p>
+        )
+      )}
+
       {stats?.recentRecommendations && stats.recentRecommendations.length > 0 && (
         <div className="mb-4">
           <h4 className="text-xs uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1.5">
             <MessageSquare className="h-3.5 w-3.5" />
-            Recent recommendations (judge can ask about these)
+            Recent recommendations
           </h4>
           <ul className="space-y-2">
             {stats.recentRecommendations.map((rec) => (
@@ -201,7 +315,9 @@ export function VoiceSessionMemory({
                 key={rec.timestamp}
                 className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-300"
               >
-                <span className="text-zinc-500 mr-2">{formatTime(rec.timestamp)}</span>
+                <span className="text-emerald-400/90 font-mono mr-2">
+                  {formatTime(rec.timestamp)}
+                </span>
                 {truncate(rec.text, 200)}
               </li>
             ))}
@@ -216,31 +332,28 @@ export function VoiceSessionMemory({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="text-xs text-emerald-400 hover:text-emerald-300"
-      >
-        {expanded ? "Hide" : "Show"} recent log events ({recent.length})
-      </button>
-
-      {expanded && recent.length > 0 && (
-        <ul className="mt-3 space-y-1.5 max-h-48 overflow-y-auto text-xs">
-          {recent.map((entry) => (
-            <li
-              key={`${entry.timestamp}-${entry.role}-${entry.text.slice(0, 24)}`}
-              className="flex gap-2 text-zinc-500"
-            >
-              <span className="shrink-0 text-zinc-600">
-                {formatTime(entry.timestamp)}
-              </span>
-              <span className="shrink-0 uppercase text-zinc-600 w-16">
-                {entry.role}
-              </span>
-              <span className="text-zinc-400 truncate">{entry.text}</span>
-            </li>
-          ))}
-        </ul>
+      {recent.length > 0 && (
+        <details className="mb-4 text-xs">
+          <summary className="cursor-pointer text-zinc-500 hover:text-zinc-400">
+            Raw log events ({recent.length})
+          </summary>
+          <ul className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
+            {recent.map((entry) => (
+              <li
+                key={`${entry.timestamp}-${entry.role}-${entry.text.slice(0, 24)}`}
+                className="flex gap-2 text-zinc-500"
+              >
+                <span className="shrink-0 text-zinc-600 font-mono">
+                  {formatTime(entry.timestamp)}
+                </span>
+                <span className="shrink-0 uppercase text-zinc-600 w-16">
+                  {entry.role}
+                </span>
+                <span className="text-zinc-400 truncate">{entry.text}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       <VoiceAskPanel contextSummary={contextSummary} />

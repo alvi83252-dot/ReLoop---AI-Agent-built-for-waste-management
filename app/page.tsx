@@ -22,6 +22,7 @@ import { InventoryUpload } from "@/components/InventoryUpload";
 import { HardwareStatusBar } from "@/components/HardwareStatusBar";
 import { DEMO_COMPANY } from "@/lib/data/demoInventory";
 import { edgeDGXRouter } from "@/lib/edge-dgx-router";
+import { buildRunningTimeline } from "@/lib/analysis/runningTimeline";
 import type { InventoryItem, PipelineResult } from "@/lib/types";
 
 type HardwareLoopMeta = {
@@ -43,18 +44,44 @@ export default function ReLoopDashboard() {
   const runAnalysis = useCallback(async () => {
     setLoading(true);
     setResult(null);
-    setLiveSteps([]);
+    setLiveSteps(buildRunningTimeline(0));
     setActiveArchStep(0);
     setEdgeActive(true);
-    setNemoclawStatus(null);
+    setNemoclawStatus("ZGX edge scan…");
+
+    let progressTimer: ReturnType<typeof setInterval> | null = null;
+    let progressIndex = 0;
 
     try {
-      const pipelineResult = await edgeDGXRouter.runFullLoop(
+      const source = inventorySource ?? "demo";
+
+      const { assets, tier: edgeTier } = await edgeDGXRouter.edgeScan(inventory);
+      progressIndex = 1;
+      setLiveSteps(buildRunningTimeline(progressIndex));
+      setActiveArchStep(1);
+      setNemoclawStatus(
+        `Edge scan (${edgeTier === "zgx" ? "ZGX live" : "local"}) · running agents + NemoClaw…`
+      );
+
+      progressTimer = setInterval(() => {
+        progressIndex = Math.min(progressIndex + 1, 8);
+        setLiveSteps(buildRunningTimeline(progressIndex));
+        setActiveArchStep(Math.min(progressIndex + 1, 7));
+      }, 900);
+
+      const pipelineResult = (await edgeDGXRouter.sendToDGX({
+        assets,
         inventory,
-        inventorySource ?? "demo"
-      ) as PipelineResult & {
+        source,
+      })) as PipelineResult & {
+        hardwareTier?: string;
         hardware?: HardwareLoopMeta;
-        nemoclaw?: { usedNemoclaw: boolean; source: string; insight: string };
+        nemoclaw?: {
+          usedNemoclaw: boolean;
+          source: string;
+          insight: string;
+          error?: string;
+        };
         nebiusBackup?: {
           status: "live" | "demo" | "error";
           summary: string;
@@ -63,19 +90,28 @@ export default function ReLoopDashboard() {
         };
       };
 
-      const statusParts: string[] = [];
-      const hw = pipelineResult.hardware;
-      if (hw) {
-        statusParts.push(
-          `Loop: ZGX ${hw.edgeTier === "zgx" ? "live" : "local"} → DGX ${hw.dgxTier === "dgx" ? "live" : "local"} → ZGX ${hw.executionTier === "zgx" ? "live" : "local"}`
-        );
+      if (progressTimer) clearInterval(progressTimer);
+
+      await edgeDGXRouter.executeEdgeDecision(pipelineResult);
+
+      const dgxTier = pipelineResult.hardwareTier === "dgx" ? "dgx" : "local";
+      const hardware: HardwareLoopMeta = {
+        edgeTier,
+        dgxTier,
+        executionTier: "local",
+      };
+
+      const statusParts: string[] = [
+        `Loop: ZGX ${hardware.edgeTier === "zgx" ? "live" : "local"} → DGX ${hardware.dgxTier === "dgx" ? "live" : "local"} → ZGX local`,
+      ];
+
+      const nemoclaw = pipelineResult.nemoclaw;
+      if (nemoclaw?.usedNemoclaw) {
+        statusParts.push(`NemoClaw (${nemoclaw.source})`);
+      } else if (nemoclaw?.error) {
+        statusParts.push("NemoClaw skipped — local agents used");
       } else {
-        const nemoclaw = pipelineResult.nemoclaw;
-        if (nemoclaw?.usedNemoclaw) {
-          statusParts.push(`NemoClaw (${nemoclaw.source})`);
-        } else {
-          statusParts.push("DGX local orchestration");
-        }
+        statusParts.push("Local agent pipeline");
       }
 
       const nb = pipelineResult.nebiusBackup;
@@ -89,18 +125,25 @@ export default function ReLoopDashboard() {
 
       setNemoclawStatus(statusParts.join(" · "));
 
+      const fullResult = {
+        ...pipelineResult,
+        assetPayloads: assets,
+        hardware,
+      };
+
       for (let i = 0; i < pipelineResult.timeline.length; i++) {
         setLiveSteps(pipelineResult.timeline.slice(0, i + 1));
-        setActiveArchStep(Math.min(i, 8));
-        await new Promise((r) => setTimeout(r, 200));
+        setActiveArchStep(Math.min(i + 1, 8));
+        await new Promise((r) => setTimeout(r, 120));
       }
 
-      setResult(pipelineResult);
+      setResult(fullResult);
       setActiveArchStep(8);
     } catch (err) {
       console.error(err);
       setNemoclawStatus(err instanceof Error ? err.message : "Analysis failed");
     } finally {
+      if (progressTimer) clearInterval(progressTimer);
       setLoading(false);
     }
   }, [inventory, inventorySource]);
@@ -176,7 +219,7 @@ export default function ReLoopDashboard() {
                 <Play className="h-5 w-5" />
               )}
               {loading
-                ? "Running NemoClaw + ZGX → DGX → ZGX..."
+                ? "Running agents (local + cloud)…"
                 : inventorySource
                   ? "Run Recovery Analysis"
                   : "Choose upload or demo data first"}

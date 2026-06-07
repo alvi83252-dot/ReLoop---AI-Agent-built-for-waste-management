@@ -20,7 +20,7 @@ import {
 import { AGENT_NAMES } from "./names";
 import { resetStepCounter } from "./utils";
 import { buildKnowledgeGraph } from "@/lib/graph/knowledgeGraph";
-import { nebiusPipelineBackup } from "@/lib/llm/nebiusAgents";
+import { runNebiusAgentJobs } from "@/lib/llm/nebiusAgents";
 import { isNebiusConfigured } from "@/lib/env/nebius";
 
 function buildNebiusBackup(ctx: AgentContext): NebiusBackup {
@@ -118,20 +118,21 @@ export async function runAgentPipeline(
   // Edge execution + reports
   const { ctx: reportCtx, reports: baseReports } = await runReportAgent(ctx);
 
-  const backup = await nebiusPipelineBackup(reportCtx, "DGX Spark local orchestration");
+  const nebiusBackup = await runNebiusAgentJobs(
+    reportCtx,
+    "DGX Spark local orchestration"
+  );
   reportCtx.nebius = {
     ...reportCtx.nebius,
-    jobs: {
-      carbon: reportCtx.nebius?.jobs.carbon ?? "demo",
-      reflection: reportCtx.nebius?.jobs.reflection ?? "demo",
-      backup: backup.status,
-    },
-    backupSummary: backup.summary,
-    model: backup.model ?? reportCtx.nebius?.model,
+    jobs: nebiusBackup.jobs,
+    carbonInsight: nebiusBackup.carbonInsight,
+    reflectionInsight: nebiusBackup.reflectionInsight,
+    backupSummary: nebiusBackup.summary,
+    model: nebiusBackup.model ?? reportCtx.nebius?.model,
   };
 
   const reports = mergeNebiusReports(baseReports, reportCtx);
-  const nebiusBackup = buildNebiusBackup(reportCtx);
+  const nebiusBackupResult = buildNebiusBackup(reportCtx);
 
   const executionStep = {
     id: `edge-exec-${Date.now()}`,
@@ -167,6 +168,6 @@ export async function runAgentPipeline(
       !process.env.ELEVEN_API_KEY &&
       !process.env.ELEVENLABS_API_KEY &&
       !process.env.NEBIUS_API_KEY,
-    nebiusBackup,
+    nebiusBackup: nebiusBackupResult,
   };
 }
