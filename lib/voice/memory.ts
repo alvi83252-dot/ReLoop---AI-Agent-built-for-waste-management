@@ -88,7 +88,7 @@ export function getPriorSessionSummary(): string {
     `Logged history: ${userTurns.length} prompts, ${assistantTurns.length} responses.`,
     lastUser ? `Last prompt: ${lastUser}` : "",
     lastSubstantive ? `Last recovery briefing: ${lastSubstantive}` : "",
-    'You can ask "list all sessions" or "what did you say at [time]".',
+    'You can ask "what did you say at 5:11 AM", "was there anything at 3 PM?", "list all sessions", or "what happened in session 2".',
   ]
     .filter(Boolean)
     .join(" ");

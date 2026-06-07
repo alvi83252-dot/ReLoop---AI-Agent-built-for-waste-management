@@ -1,7 +1,6 @@
 import type { AgentContext, OptimizationResult, RecoveryAction } from "@/lib/types";
 import { OptimizationResultSchema } from "@/lib/types";
 import { pickDestination } from "@/lib/simulation/londonData";
-import { nebiusCarbonImpactAgent } from "@/lib/llm/nebiusAgents";
 import { AGENT_NAMES } from "./names";
 import { finishStep, createStep, simulateAgentDelay } from "./utils";
 
@@ -82,24 +81,11 @@ export async function runCarbonAgent(ctx: AgentContext): Promise<AgentContext> {
     0
   );
 
-  const nebiusCarbon = await nebiusCarbonImpactAgent(ctx);
-  ctx.nebius = {
-    ...ctx.nebius,
-    jobs: {
-      carbon: nebiusCarbon.status,
-      reflection: ctx.nebius?.jobs.reflection ?? "demo",
-      backup: ctx.nebius?.jobs.backup ?? "demo",
-    },
-    carbonInsight: nebiusCarbon.insight || ctx.nebius?.carbonInsight,
-    model: nebiusCarbon.model ?? ctx.nebius?.model,
-  };
-
-  const carbonMessage =
-    nebiusCarbon.status === "live"
-      ? `Carbon forecast: ${totalCarbon.toLocaleString()} kg CO₂ (local) + Nebius cloud analysis`
-      : `Carbon forecast: ${totalCarbon.toLocaleString()} kg CO₂ saved vs disposal (London datasets)`;
-
-  finishStep(ctx.timeline, step, carbonMessage);
+  finishStep(
+    ctx.timeline,
+    step,
+    `Carbon forecast: ${totalCarbon.toLocaleString()} kg CO₂ saved vs disposal (London datasets)`
+  );
   return ctx;
 }
 

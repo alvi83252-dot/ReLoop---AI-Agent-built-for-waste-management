@@ -4,8 +4,16 @@ export type MemoryIntent =
   | { type: "list_sessions" }
   | { type: "session_index"; index: number }
   | { type: "session_relative"; which: "first" | "last" | "previous" }
-  | { type: "time"; hour: number; minute: number }
+  | {
+      type: "time";
+      hour: number;
+      minute: number;
+      meridiem?: "am" | "pm";
+      sessionIndex?: number;
+      sessionWhich?: "first" | "last" | "previous";
+    }
   | { type: "time_recent" }
+  | { type: "list_times" }
   | { type: "full_transcript"; sessionIndex?: number }
   | { type: "topic" };
 
@@ -33,8 +41,9 @@ export function formatLogClock(iso: string): string {
     return new Date(iso).toLocaleString(undefined, {
       month: "short",
       day: "numeric",
-      hour: "2-digit",
+      hour: "numeric",
       minute: "2-digit",
+      hour12: true,
     });
   } catch {
     return iso;
@@ -44,37 +53,64 @@ export function formatLogClock(iso: string): string {
 function formatLogTime(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString(undefined, {
-      hour: "2-digit",
+      hour: "numeric",
       minute: "2-digit",
+      hour12: true,
     });
   } catch {
     return iso;
   }
 }
 
-function parseClock(hour: number, minute: number, meridiem?: string): {
-  hour: number;
-  minute: number;
-} {
-  let h = hour;
-  const m = minute;
-  if (meridiem) {
-    const lower = meridiem.toLowerCase().replace(/\./g, "");
-    if (lower.startsWith("p") && h < 12) h += 12;
-    if (lower.startsWith("a") && h === 12) h = 0;
-  }
-  return { hour: h, minute: m };
+/** Human-readable clock with AM/PM, e.g. "5:11 AM". */
+export function formatTimeMeridiem(hour: number, minute: number): string {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
-/** Parse clock times including 5:11 a.m. and typo forms like 527 a.m. → 5:27 */
+function normalizeMeridiem(raw?: string): "am" | "pm" | undefined {
+  if (!raw) return undefined;
+  const lower = raw.toLowerCase().replace(/\./g, "").replace(/\s+/g, "").trim();
+  if (lower.startsWith("p")) return "pm";
+  if (lower.startsWith("a")) return "am";
+  return undefined;
+}
+
+function isMeridiemToken(value?: string): boolean {
+  return normalizeMeridiem(value) !== undefined;
+}
+
+function parseClock(
+  hour: number,
+  minute: number,
+  meridiem?: string
+): { hour: number; minute: number; meridiem?: "am" | "pm" } {
+  let h = hour;
+  const m = minute;
+  const normalized = normalizeMeridiem(meridiem);
+  if (normalized === "pm" && h < 12) h += 12;
+  if (normalized === "am" && h === 12) h = 0;
+  return { hour: h, minute: m, meridiem: normalized };
+}
+
+/** Parse clock times including 5:11 AM, 5:11am, 5 pm, and typo 527 a.m. → 5:27 */
 export function parseTimeFromQuestion(
   question: string
-): { hour: number; minute: number } | null {
+): { hour: number; minute: number; meridiem?: "am" | "pm" } | null {
   const q = question.toLowerCase().replace(/\s+/g, " ").trim();
 
   const patterns: RegExp[] = [
-    new RegExp(`\\bat\\s+(\\d{1,2}):(\\d{2})\\s*${MERIDIEM}`, "i"),
-    new RegExp(`\\b(\\d{1,2}):(\\d{2})\\s*${MERIDIEM}`, "i"),
+    new RegExp(`\\bat\\s+(\\d{1,2})[:.](\\d{2})\\s*${MERIDIEM}`, "i"),
+    new RegExp(`\\b(\\d{1,2})[:.](\\d{2})\\s*${MERIDIEM}`, "i"),
+    new RegExp(`\\bat\\s+(\\d{1,2})\\s+(\\d{2})\\s*${MERIDIEM}`, "i"),
+    new RegExp(`\\b(\\d{1,2})\\s+(\\d{2})\\s*${MERIDIEM}`, "i"),
+    new RegExp(`\\bat\\s+(\\d{1,2})\\s*${MERIDIEM}`, "i"),
+    new RegExp(`\\b(\\d{1,2})\\s*${MERIDIEM}`, "i"),
     new RegExp(`\\bat\\s+(\\d{1,2}):(\\d{2})\\b`, "i"),
     new RegExp(`\\b(\\d{1,2}):(\\d{2})\\b`, "i"),
     new RegExp(`\\bat\\s+(\\d{3,4})\\s*${MERIDIEM}`, "i"),
@@ -97,26 +133,109 @@ export function parseTimeFromQuestion(
     }
 
     const hour = Number(match[1]);
-    const minute = match[2] ? Number(match[2]) : 0;
-    const meridiem = match[3];
+    let minute = 0;
+    let meridiemRaw: string | undefined;
+
+    if (match[2] && /^\d+$/.test(match[2])) {
+      minute = Number(match[2]);
+      meridiemRaw = match[3];
+    } else if (isMeridiemToken(match[2])) {
+      meridiemRaw = match[2];
+    } else if (isMeridiemToken(match[3])) {
+      minute = match[2] ? Number(match[2]) : 0;
+      meridiemRaw = match[3];
+    } else {
+      minute = match[2] ? Number(match[2]) : 0;
+      meridiemRaw = match[3];
+    }
+
+    return parseClock(hour, minute, meridiemRaw);
+  }
+
+  const dayPart = q.match(
+    /\bat\s+(\d{1,2})(?::(\d{2}))?\s+(?:in the )?(morning|afternoon|evening|night)\b/
+  );
+  if (dayPart) {
+    const hour = Number(dayPart[1]);
+    const minute = dayPart[2] ? Number(dayPart[2]) : 0;
+    const part = dayPart[3];
+    const meridiem =
+      part === "morning" || part === "night"
+        ? "am"
+        : part === "afternoon" || part === "evening"
+          ? "pm"
+          : undefined;
     return parseClock(hour, minute, meridiem);
   }
 
   return null;
 }
 
+function parseSessionScope(
+  question: string
+): { sessionIndex?: number; sessionWhich?: "first" | "last" | "previous" } | null {
+  const q = question.toLowerCase();
+  const sessionNum = q.match(/session\s+(\d+)/);
+  if (sessionNum) return { sessionIndex: Number(sessionNum[1]) };
+  if (/first\s+session/.test(q)) return { sessionWhich: "first" };
+  if (/last\s+session|latest\s+session|most\s+recent\s+session/.test(q)) {
+    return { sessionWhich: "last" };
+  }
+  if (/previous\s+session|prior\s+session|earlier\s+session/.test(q)) {
+    return { sessionWhich: "previous" };
+  }
+  return null;
+}
+
+function resolveSessionEntries(
+  blocks: SessionBlock[],
+  scope?: { sessionIndex?: number; sessionWhich?: "first" | "last" | "previous" }
+): { entries: VoiceLogEntry[]; label: string } | null {
+  if (!scope || blocks.length === 0) return null;
+
+  let index = scope.sessionIndex;
+  if (scope.sessionWhich === "first") index = 1;
+  if (scope.sessionWhich === "last") index = blocks.length;
+  if (scope.sessionWhich === "previous") index = Math.max(1, blocks.length - 1);
+
+  if (!index || index < 1 || index > blocks.length) return null;
+
+  const block = blocks[index - 1];
+  return {
+    entries: block.entries,
+    label: `session ${index} (started ${formatLogClock(block.startedAt)})`,
+  };
+}
+
 export function questionLooksTimeBased(question: string): boolean {
   const q = question.toLowerCase();
   return (
     parseTimeFromQuestion(question) !== null ||
-    /\b(at|time|when|o'clock|clock)\b/.test(q) ||
+    /\b(at|time|when|o'clock|clock|morning|afternoon|evening)\b/.test(q) ||
+    /\b\d{1,2}\s*(?:am|pm|a\.m|p\.m)\b/.test(q) ||
     /\d{1,2}:\d{2}/.test(q) ||
-    /\d{3,4}\s*(?:a|p)\.?/i.test(q)
+    /\d{3,4}\s*(?:a|p)\.?/i.test(q) ||
+    /\b(nothing|anything)\s+at\b/.test(q) ||
+    /\bwas\s+there\s+(anything|something)\b/.test(q)
+  );
+}
+
+export function questionLooksSessionMemoryBased(question: string): boolean {
+  const q = question.toLowerCase();
+  return (
+    questionLooksTimeBased(question) ||
+    /previous\s+session|prior\s+session|last\s+session|earlier\s+session|session\s+\d+/.test(
+      q
+    ) ||
+    /list\s+(all\s+)?(previous\s+)?sessions?|show\s+(all\s+)?sessions?/.test(q) ||
+    /what\s+did\s+(you|i)\s+say|what\s+happened\s+in\s+session/.test(q) ||
+    /full\s+transcript|logged\s+at|what\s+times?|when\s+did\s+(you|we)/.test(q)
   );
 }
 
 export function detectMemoryIntent(question: string): MemoryIntent {
   const q = question.toLowerCase();
+  const sessionScope = parseSessionScope(question);
 
   if (
     /list\s+(all\s+)?(previous\s+)?sessions?/.test(q) ||
@@ -129,7 +248,24 @@ export function detectMemoryIntent(question: string): MemoryIntent {
 
   const parsedTime = parseTimeFromQuestion(question);
   if (parsedTime) {
-    return { type: "time", ...parsedTime };
+    return {
+      type: "time",
+      ...parsedTime,
+      ...(sessionScope?.sessionIndex
+        ? { sessionIndex: sessionScope.sessionIndex }
+        : {}),
+      ...(sessionScope?.sessionWhich
+        ? { sessionWhich: sessionScope.sessionWhich }
+        : {}),
+    };
+  }
+
+  if (
+    /what\s+times?|when\s+did\s+(you|we)|logged\s+times?|available\s+times?|what\s+can\s+i\s+ask\s+about/.test(
+      q
+    )
+  ) {
+    return { type: "list_times" };
   }
 
   if (
@@ -149,7 +285,7 @@ export function detectMemoryIntent(question: string): MemoryIntent {
   if (/last\s+session|latest\s+session|most\s+recent\s+session/.test(q)) {
     return { type: "session_relative", which: "last" };
   }
-  if (/previous\s+session|prior\s+session/.test(q)) {
+  if (/previous\s+session|prior\s+session|earlier\s+session/.test(q)) {
     return { type: "session_relative", which: "previous" };
   }
 
@@ -171,6 +307,16 @@ export function groupEntriesBySession(entries: VoiceLogEntry[]): SessionBlock[] 
   const blocks: SessionBlock[] = [];
   let current: SessionBlock | null = null;
 
+  const startNewBlock = (entry: VoiceLogEntry) => {
+    if (current && current.entries.length > 0) blocks.push(current);
+    const baseId = entry.session_id ?? "orphan";
+    current = {
+      sessionId: `${baseId}@${entry.timestamp}`,
+      startedAt: entry.timestamp,
+      entries: [],
+    };
+  };
+
   for (const entry of entries) {
     const isStart =
       entry.role === "event" &&
@@ -182,16 +328,11 @@ export function groupEntriesBySession(entries: VoiceLogEntry[]): SessionBlock[] 
       isStart ||
       (entry.session_id &&
         current &&
-        entry.session_id !== current.sessionId &&
+        entry.session_id !== current.sessionId.split("@")[0] &&
         current.entries.length > 0);
 
     if (newSession || !current) {
-      if (current && current.entries.length > 0) blocks.push(current);
-      current = {
-        sessionId: entry.session_id ?? `block-${entry.timestamp}`,
-        startedAt: entry.timestamp,
-        entries: [],
-      };
+      startNewBlock(entry);
     }
 
     current!.entries.push(entry);
@@ -279,16 +420,20 @@ function isGreetingNoise(entry: VoiceLogEntry): boolean {
   return isPollutedMemoryReply(entry);
 }
 
-function listAvailableConversationTimes(entries: VoiceLogEntry[], limit = 6): string {
-  const meaningful = entries.filter((e) => {
+function meaningfulConversationEntries(entries: VoiceLogEntry[]): VoiceLogEntry[] {
+  return entries.filter((e) => {
     if (e.role !== "user" && e.role !== "assistant") return false;
     if (isGreetingNoise(e)) return false;
     if (e.role === "user") return e.text.trim().length > 0;
     return e.text.trim().length >= 20;
   });
+}
+
+function listAvailableConversationTimes(entries: VoiceLogEntry[], limit = 6): string {
+  const meaningful = meaningfulConversationEntries(entries);
 
   if (meaningful.length === 0) {
-    return "No Q&A turns logged yet — ask me something first.";
+    return "No Q&A turns logged yet — ask me something first, then try again with a time like \"5:11 AM\".";
   }
 
   const seen = new Set<string>();
@@ -306,43 +451,86 @@ function listAvailableConversationTimes(entries: VoiceLogEntry[], limit = 6): st
   const lines = picked.map((e) => {
     const preview =
       e.text.slice(0, 70).trim() + (e.text.length > 70 ? "…" : "");
-    return `• ${formatLogClock(e.timestamp)} — ${roleLabel(e.role)}: "${preview}"`;
+    return `• ${formatLogTime(e.timestamp)} — ${roleLabel(e.role)}: "${preview}"`;
   });
 
-  return ["Recent moments you can ask about by time:", ...lines].join("\n");
+  return [
+    "Logged times you can ask about (use AM/PM, e.g. \"what did you say at 9:26 AM\"):",
+    ...lines,
+  ].join("\n");
 }
 
-function formatLogTimeFromParts(hour: number, minute: number): string {
-  const d = new Date();
-  d.setHours(hour, minute, 0, 0);
-  return formatLogTime(d.toISOString());
+function describeNearestTimes(
+  entries: VoiceLogEntry[],
+  hour: number,
+  minute: number
+): string {
+  const meaningful = meaningfulConversationEntries(entries);
+  if (meaningful.length === 0) return "";
+
+  const target = hour * 60 + minute;
+  let before: VoiceLogEntry | null = null;
+  let after: VoiceLogEntry | null = null;
+
+  for (const entry of meaningful) {
+    const d = new Date(entry.timestamp);
+    const value = d.getHours() * 60 + d.getMinutes();
+    if (value < target && (!before || value > new Date(before.timestamp).getHours() * 60 + new Date(before.timestamp).getMinutes())) {
+      before = entry;
+    }
+    if (value > target && (!after || value < new Date(after.timestamp).getHours() * 60 + new Date(after.timestamp).getMinutes())) {
+      after = entry;
+    }
+  }
+
+  const hints: string[] = [];
+  if (before) {
+    hints.push(
+      `Closest earlier log: ${formatLogTime(before.timestamp)} — ${roleLabel(before.role)}: "${before.text.slice(0, 60).trim()}${before.text.length > 60 ? "…" : ""}"`
+    );
+  }
+  if (after) {
+    hints.push(
+      `Closest later log: ${formatLogTime(after.timestamp)} — ${roleLabel(after.role)}: "${after.text.slice(0, 60).trim()}${after.text.length > 60 ? "…" : ""}"`
+    );
+  }
+
+  if (hints.length === 0) return "";
+  return hints.join("\n");
 }
 
 function answerAtTime(
   entries: VoiceLogEntry[],
   hour: number,
-  minute: number
+  minute: number,
+  options?: { sessionLabel?: string }
 ): string {
-  const matched = entriesAtExactMinute(entries, hour, minute).filter(
-    isConversationEntry
-  );
+  const matched = entriesAtExactMinute(entries, hour, minute)
+    .filter(isConversationEntry)
+    .filter((entry) => !isGreetingNoise(entry));
+
+  const timeLabel = formatTimeMeridiem(hour, minute);
+  const scopeNote = options?.sessionLabel
+    ? ` in ${options.sessionLabel}`
+    : " in any logged session";
 
   if (matched.length === 0) {
-    const label = formatLogTimeFromParts(hour, minute);
     return [
-      `Nothing was logged at exactly ${label}. I only report exact log timestamps — no guesses.`,
-      "",
+      `There was nothing logged at exactly ${timeLabel}${scopeNote}. I only answer from the JSONL transcript — no guesses.`,
+      describeNearestTimes(entries, hour, minute),
       listAvailableConversationTimes(entries),
-    ].join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n\n");
   }
 
   const when = formatLogClock(matched[0].timestamp);
   const lines = matched.map(formatConversationLine);
+  const header = options?.sessionLabel
+    ? `Exact conversation at ${timeLabel} (${when}) in ${options.sessionLabel}:`
+    : `Exact conversation at ${timeLabel} (${when}) — your prompt and my reply, in order:`;
 
-  return [
-    `Exact conversation at ${when} — your prompt and my reply, in order:`,
-    ...lines,
-  ].join("\n");
+  return [header, ...lines].join("\n");
 }
 
 function answerRecentTime(entries: VoiceLogEntry[]): string {
@@ -368,16 +556,22 @@ function listAllSessions(entries: VoiceLogEntry[]): string {
   }
 
   const lines = blocks.map((block, i) => {
-    const turns = block.entries.filter(
-      (e) => e.role === "user" || e.role === "assistant"
-    ).length;
-    return `Session ${i + 1} — started ${formatLogClock(block.startedAt)} — ${turns} turns`;
+    const turns = meaningfulConversationEntries(block.entries);
+    const sampleTimes = turns
+      .slice(0, 3)
+      .map((e) => formatLogTime(e.timestamp))
+      .join(", ");
+    const turnLine =
+      turns.length > 0
+        ? `${turns.length} logged turn${turns.length === 1 ? "" : "s"}${sampleTimes ? ` at ${sampleTimes}` : ""}`
+        : "no conversation logged yet";
+    return `Session ${i + 1} — started ${formatLogClock(block.startedAt)} — ${turnLine}`;
   });
 
   return [
     `I have ${blocks.length} logged session${blocks.length === 1 ? "" : "s"}:`,
     ...lines,
-    'Ask "what did you say in session 2" or "what did you say at 5:11 AM" for an exact transcript.',
+    'Ask "what did you say at 5:11 AM", "was there anything at 3 PM", or "what did you say in session 2 at 9:26 AM".',
   ].join("\n");
 }
 
@@ -467,10 +661,30 @@ export function answerFromSessionMemory(
     }
     case "session_relative":
       return sessionByRelative(blocks, intent.which);
-    case "time":
-      return answerAtTime(entries, intent.hour, intent.minute);
+    case "time": {
+      let searchEntries = entries;
+      let sessionLabel: string | undefined;
+
+      if (intent.sessionIndex || intent.sessionWhich) {
+        const resolved = resolveSessionEntries(blocks, {
+          sessionIndex: intent.sessionIndex,
+          sessionWhich: intent.sessionWhich,
+        });
+        if (!resolved) {
+          return `That session was not found. I have ${blocks.length} logged session${blocks.length === 1 ? "" : "s"}.`;
+        }
+        searchEntries = resolved.entries;
+        sessionLabel = resolved.label;
+      }
+
+      return answerAtTime(searchEntries, intent.hour, intent.minute, {
+        sessionLabel,
+      });
+    }
     case "time_recent":
       return answerRecentTime(entries);
+    case "list_times":
+      return listAvailableConversationTimes(entries, 10);
     case "full_transcript": {
       if (intent.sessionIndex) {
         const transcript = sessionByIndex(blocks, intent.sessionIndex);

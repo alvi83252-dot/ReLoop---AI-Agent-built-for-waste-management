@@ -27,7 +27,7 @@ export async function runDgxOrchestration(payload: {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (res.ok) {
@@ -61,13 +61,18 @@ export async function runDgxOrchestration(payload: {
     }
   }
 
-  const nemoclaw = useNemoclaw
-    ? await analyzeInventoryWithNemoclaw(payload.inventory)
-    : { usedNemoclaw: false, insight: "", source: "fallback" as const };
-
-  let pipeline = await runAgentPipeline(payload.inventory, {
-    source: payload.source ?? "demo",
-  });
+  const [nemoclaw, pipeline] = await Promise.all([
+    useNemoclaw
+      ? analyzeInventoryWithNemoclaw(payload.inventory)
+      : Promise.resolve({
+          usedNemoclaw: false,
+          insight: "",
+          source: "fallback" as const,
+        }),
+    runAgentPipeline(payload.inventory, {
+      source: payload.source ?? "demo",
+    }),
+  ]);
 
   if (nemoclaw.insight) {
     pipeline.reports.reflectionNotes = [

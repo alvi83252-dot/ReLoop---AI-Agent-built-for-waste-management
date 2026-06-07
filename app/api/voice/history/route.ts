@@ -7,6 +7,7 @@ import {
   loadConversationHistory,
   loadFullVoiceSession,
 } from "@/lib/voice/memory";
+import { buildSessionTimeline } from "@/lib/voice/sessionTimeline";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,7 @@ export async function GET() {
   const summary = getPriorSessionSummary();
   const recent = getRecentVoiceSessions(8);
   const stats = getSessionStats();
+  const sessions = buildSessionTimeline(entries);
 
   return NextResponse.json({
     count: entries.length,
@@ -25,5 +27,6 @@ export async function GET() {
     recent,
     entries,
     stats,
+    sessions,
   });
 }

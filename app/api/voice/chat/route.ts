@@ -5,6 +5,7 @@ import { synthesizeVoiceResponse } from "@/lib/voice/elevenLabsTts";
 import {
   answerFromSessionMemory,
   detectMemoryIntent,
+  questionLooksSessionMemoryBased,
   questionLooksTimeBased,
 } from "@/lib/voice/memoryAnswer";
 import {
@@ -89,7 +90,7 @@ export async function POST(req: Request) {
 
       const greeting =
         sessionCount > 0 || history.length > 0
-          ? `ReLoop voice agent online. I remember ${Math.max(sessionCount, 1)} prior session${sessionCount === 1 ? "" : "s"} and ${history.length} conversation turns. Ask me about laptops, carbon savings, or recovery value.`
+          ? `ReLoop voice agent online. I remember ${Math.max(sessionCount, 1)} prior session${sessionCount === 1 ? "" : "s"} and ${history.length} conversation turns. Ask by clock time with AM or PM, like "what did you say at 5:11 AM", or ask about a previous session.`
           : "ReLoop voice agent online. Run a recovery analysis first, or ask me about London circular economy routing for enterprise IT assets.";
 
       loggedEntries.push(
@@ -132,7 +133,11 @@ export async function POST(req: Request) {
     let engine = "memory";
 
     // Session/time queries use JSONL logs only — never guess from other sessions
-    if (intent.type !== "topic" || questionLooksTimeBased(question)) {
+    if (
+      intent.type !== "topic" ||
+      questionLooksTimeBased(question) ||
+      questionLooksSessionMemoryBased(question)
+    ) {
       reply = answerFromSessionMemory(question, allEntries);
     } else {
       const nemotron = await askWithTimeout(

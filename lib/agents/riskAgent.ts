@@ -1,5 +1,4 @@
 import type { AgentContext } from "@/lib/types";
-import { nebiusReflectionAgent } from "@/lib/llm/nebiusAgents";
 import { AGENT_NAMES } from "./names";
 import { finishStep, createStep, simulateAgentDelay } from "./utils";
 
@@ -56,24 +55,7 @@ export async function runReflectionAgent(ctx: AgentContext): Promise<AgentContex
       ? `Reflection: ${lowConf.length} groups flagged for secondary review. Overall strategy prioritises circular outcomes with ${reuseCount}/${ctx.circular.length} groups routed away from landfill.`
       : `Reflection: High consensus across agents. ${reuseCount}/${ctx.circular.length} asset groups achieve circular outcomes with strong confidence.`;
 
-  const nebiusReflection = await nebiusReflectionAgent(ctx);
-  ctx.nebius = {
-    ...ctx.nebius,
-    jobs: {
-      carbon: ctx.nebius?.jobs.carbon ?? "demo",
-      reflection: nebiusReflection.status,
-      backup: ctx.nebius?.jobs.backup ?? "demo",
-    },
-    reflectionInsight: nebiusReflection.insight || ctx.nebius?.reflectionInsight,
-    model: nebiusReflection.model ?? ctx.nebius?.model,
-  };
-
-  const reflectionMessage =
-    nebiusReflection.status === "live"
-      ? "Plan review complete — local consensus + Nebius cloud critique"
-      : "Plan review complete — recommendations validated";
-
-  finishStep(ctx.timeline, step, reflectionMessage);
+  finishStep(ctx.timeline, step, "Plan review complete — recommendations validated");
   return ctx;
 }
 
