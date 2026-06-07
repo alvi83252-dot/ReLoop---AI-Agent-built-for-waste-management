@@ -1,11 +1,12 @@
 import type { AgentContext } from "@/lib/types";
-import { completeStep, createStep, simulateAgentDelay } from "./utils";
+import { AGENT_NAMES } from "./names";
+import { finishStep, createStep, simulateAgentDelay } from "./utils";
 
 export async function runLifecycleAgent(ctx: AgentContext): Promise<AgentContext> {
   const step = createStep(
-    "Lifecycle Agent",
+    AGENT_NAMES.lifecycle,
     "dgx",
-    "DGX Spark: predicting remaining useful life and repairability..."
+    "Predicting remaining useful life and repairability..."
   );
   ctx.timeline.push(step);
   await simulateAgentDelay(500);
@@ -30,16 +31,13 @@ export async function runLifecycleAgent(ctx: AgentContext): Promise<AgentContext
     };
   });
 
-  ctx.timeline.push(
-    completeStep(
-      step,
-      `Lifecycle analysis: avg ${(
-        ctx.lifecycle.reduce(
-          (s, l) => s + (l.remainingYears as number),
-          0
-        ) / ctx.lifecycle.length
-      ).toFixed(1)} years remaining useful life`
-    )
+  finishStep(
+    ctx.timeline,
+    step,
+    `Lifecycle analysis: avg ${(
+      ctx.lifecycle.reduce((s, l) => s + (l.remainingYears as number), 0) /
+      ctx.lifecycle.length
+    ).toFixed(1)} years remaining useful life`
   );
   return ctx;
 }

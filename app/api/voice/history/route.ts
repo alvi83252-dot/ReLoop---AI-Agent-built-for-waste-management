@@ -3,6 +3,7 @@ import {
   getPriorSessionSummary,
   getRecentVoiceSessions,
   getSessionCount,
+  getSessionStats,
   loadConversationHistory,
   loadFullVoiceSession,
 } from "@/lib/voice/memory";
@@ -14,6 +15,7 @@ export async function GET() {
   const history = loadConversationHistory();
   const summary = getPriorSessionSummary();
   const recent = getRecentVoiceSessions(8);
+  const stats = getSessionStats();
 
   return NextResponse.json({
     count: entries.length,
@@ -22,5 +24,6 @@ export async function GET() {
     history,
     recent,
     entries,
+    stats,
   });
 }

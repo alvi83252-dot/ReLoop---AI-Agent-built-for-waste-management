@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { runAgentPipeline } from "@/lib/agents";
-import { nebiusBackupInference } from "@/lib/llm/nebius";
+import { runDgxOrchestration } from "@/lib/edge-dgx-router/dgxServer";
 import type { InventoryItem } from "@/lib/types";
 import { InventoryItemSchema } from "@/lib/types";
 
@@ -15,18 +14,24 @@ export async function POST(req: Request) {
         })
     );
 
-    const result = await runAgentPipeline(inventory);
-    const nebius = await nebiusBackupInference({ inventorySize: inventory.length });
+    const result = await runDgxOrchestration({
+      assets: data.assets ?? [],
+      inventory,
+      source: data.source,
+      useNemoclaw: data.useNemoclaw !== false,
+    });
 
     return NextResponse.json({
       ...result,
-      nebiusBackup: nebius,
       reasoningPath: result.timeline
         .filter((s) => s.layer === "dgx" || s.layer === "synthesis")
         .map((s) => s.message),
       hardware: {
         edge: "HP ZGX Nano AI Station",
-        core: "NVIDIA DGX Spark (Scan)",
+        core:
+          result.hardwareTier === "dgx"
+            ? "NVIDIA DGX Spark (Scan) — live"
+            : "NVIDIA DGX Spark (local fallback)",
         acceleration: "CUDA / TensorRT / PyTorch",
         cloudBackup: "Nebius",
       },

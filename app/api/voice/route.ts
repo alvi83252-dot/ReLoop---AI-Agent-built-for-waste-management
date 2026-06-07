@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import https from "node:https";
 import { getElevenLabsConfig } from "@/lib/env/elevenlabs";
+import { synthesizeVoiceResponse } from "@/lib/voice/elevenLabsTts";
 import {
   getPriorSessionSummary,
   getSessionCount,
@@ -18,52 +18,6 @@ function getErrorCause(error: unknown): string | undefined {
     }
   }
   return undefined;
-}
-
-/** HTTPS request using system-friendly TLS (works behind corporate proxies on Windows). */
-function elevenLabsTts(
-  voiceId: string,
-  apiKey: string,
-  text: string,
-  modelId: string
-): Promise<Buffer> {
-  const body = JSON.stringify({ text, model_id: modelId });
-
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        hostname: "api.elevenlabs.io",
-        path: `/v1/text-to-speech/${voiceId}`,
-        method: "POST",
-        headers: {
-          Accept: "audio/mpeg",
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(body),
-          "xi-api-key": apiKey,
-        },
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (chunk: Buffer) => chunks.push(chunk));
-        res.on("end", () => {
-          const buffer = Buffer.concat(chunks);
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(buffer);
-            return;
-          }
-          reject(
-            new Error(
-              `ElevenLabs HTTP ${res.statusCode}: ${buffer.toString("utf8").slice(0, 300)}`
-            )
-          );
-        });
-      }
-    );
-
-    req.on("error", reject);
-    req.write(body);
-    req.end();
-  });
 }
 
 export async function POST(req: Request) {
@@ -111,27 +65,51 @@ export async function POST(req: Request) {
       logVoiceEvent("assistant", text, { source: "reloop_dashboard" }, sessionId)
     );
 
-    const audioBuffer = await elevenLabsTts(voiceId, apiKey, text, modelId);
-    const base64 = audioBuffer.toString("base64");
+    const voicePayload = await synthesizeVoiceResponse(apiKey, voiceId, modelId, text);
+
+    if (voicePayload.mode === "elevenlabs") {
+      loggedEntries.push(
+        logVoiceEvent(
+          "event",
+          "ElevenLabs audio synthesized successfully",
+          { voiceId, chars: text.length },
+          sessionId
+        )
+      );
+
+      return NextResponse.json({
+        mode: "elevenlabs",
+        audio: voicePayload.audio,
+        text,
+        voiceId,
+        sessionId,
+        rememberedSessions: sessionCount,
+        priorSummary: priorSummary || null,
+        loggedEntries,
+      });
+    }
 
     loggedEntries.push(
       logVoiceEvent(
         "event",
-        "ElevenLabs audio synthesized successfully",
-        { voiceId, chars: text.length },
+        voicePayload.message.includes("blocked")
+          ? "ElevenLabs free tier blocked — browser voice fallback"
+          : "ElevenLabs unavailable — browser voice fallback",
+        { error: voicePayload.message.slice(0, 300) },
         sessionId
       )
     );
 
     return NextResponse.json({
-      mode: "elevenlabs",
-      audio: `data:audio/mpeg;base64,${base64}`,
+      mode: "browser",
       text,
-      voiceId,
       sessionId,
       rememberedSessions: sessionCount,
       priorSummary: priorSummary || null,
       loggedEntries,
+      message: voicePayload.message.includes("blocked")
+        ? "ElevenLabs free tier is disabled on this account (VPN/proxy or multiple free accounts). Using browser voice so you can still demo. For the prize, use a paid ElevenLabs key or disable VPN."
+        : voicePayload.message,
     });
   } catch (error) {
     const cause = getErrorCause(error);

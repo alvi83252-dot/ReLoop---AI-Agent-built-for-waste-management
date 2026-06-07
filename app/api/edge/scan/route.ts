@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { edgeDGXRouter } from "@/lib/edge-dgx-router";
 import { InventoryItemSchema } from "@/lib/types";
+import { runZgxEdgeScan } from "@/lib/edge-dgx-router/server";
 
 export async function POST(req: Request) {
   try {
@@ -13,12 +13,14 @@ export async function POST(req: Request) {
         })
     );
 
-    const assets = await edgeDGXRouter.edgeScan(inventory);
+    const { assets, tier } = await runZgxEdgeScan(inventory);
 
     return NextResponse.json({
       status: "edge_scan_complete",
-      processedAt: "ZGX_NANO",
-      acceleration: "NVIDIA TensorRT",
+      tier,
+      processedAt: tier === "zgx" ? "ZGX_NANO" : "ZGX_NANO_LOCAL",
+      acceleration: tier === "zgx" ? "NVIDIA CUDA / TensorRT / PyTorch" : "local-simulated",
+      hardware: "HP ZGX Nano AI Station",
       assets,
       confidence: 0.82,
     });

@@ -1,62 +1,84 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Volume2, Loader2, AlertCircle, History, HardDrive } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  appendLocalSessionLogs,
-  buildMemoryView,
-  loadLocalSessionLogs,
-  mergeSessionLogs,
-} from "@/lib/voice/localMemory";
-import type { VoiceLogEntry, VoiceMemoryView } from "@/lib/voice/types";
+  Volume2,
+  Loader2,
+  AlertCircle,
+  Pause,
+  Square,
+  Play,
+} from "lucide-react";
+import { appendLocalSessionLogs } from "@/lib/voice/localMemory";
+import type { VoiceLogEntry } from "@/lib/voice/types";
 
-async function loadMergedMemory(): Promise<VoiceMemoryView> {
-  const localEntries = loadLocalSessionLogs();
-
-  try {
-    const res = await fetch("/api/voice/history");
-    if (!res.ok) throw new Error("Server history unavailable");
-    const data = (await res.json()) as {
-      entries?: VoiceLogEntry[];
-      recent?: VoiceLogEntry[];
-    };
-    const serverEntries = data.entries ?? data.recent ?? [];
-    const merged = mergeSessionLogs(serverEntries, localEntries);
-    saveMergedToLocal(merged);
-    return buildMemoryView(merged);
-  } catch {
-    return buildMemoryView(localEntries);
-  }
-}
-
-function saveMergedToLocal(entries: VoiceLogEntry[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem("reloop_voice_session_logs", JSON.stringify(entries.slice(-200)));
-  } catch {
-    // ignore quota errors
-  }
-}
+type PlaybackState = "idle" | "loading" | "playing" | "paused";
+type VoiceMode = "elevenlabs" | "browser" | "demo";
 
 export function VoiceAgent({ text }: { text: string }) {
-  const [speaking, setSpeaking] = useState(false);
-  const [mode, setMode] = useState<"elevenlabs" | "demo">("elevenlabs");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const browserTextRef = useRef<string>("");
+  const [playback, setPlayback] = useState<PlaybackState>("idle");
+  const [mode, setMode] = useState<VoiceMode>("elevenlabs");
   const [error, setError] = useState<string | null>(null);
-  const [memory, setMemory] = useState<VoiceMemoryView | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const refreshMemory = useCallback(async () => {
-    const view = await loadMergedMemory();
-    setMemory(view);
+  const stopBrowserSpeech = useCallback(() => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
   }, []);
 
-  useEffect(() => {
-    refreshMemory();
-  }, [refreshMemory]);
+  const stopPlayback = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      audio.currentTime = 0;
+      audioRef.current = null;
+    }
+    stopBrowserSpeech();
+    setPlayback("idle");
+  }, [stopBrowserSpeech]);
 
-  async function speak() {
-    if (!text || speaking) return;
-    setSpeaking(true);
+  const speakWithBrowser = useCallback(
+    (speechText: string) =>
+      new Promise<void>((resolve, reject) => {
+        if (typeof window === "undefined" || !window.speechSynthesis) {
+          reject(new Error("Browser speech synthesis is not available."));
+          return;
+        }
+
+        stopBrowserSpeech();
+        browserTextRef.current = speechText;
+
+        const utterance = new SpeechSynthesisUtterance(speechText);
+        utterance.rate = 1;
+        utterance.pitch = 1;
+        utterance.onend = () => resolve();
+        utterance.onerror = () => reject(new Error("Browser speech playback failed."));
+
+        window.speechSynthesis.speak(utterance);
+      }),
+    [stopBrowserSpeech]
+  );
+
+  useEffect(() => {
+    stopPlayback();
     setError(null);
+    setNotice(null);
+  }, [text, stopPlayback]);
+
+  useEffect(() => {
+    return () => stopPlayback();
+  }, [stopPlayback]);
+
+  async function loadAndPlay() {
+    if (!text.trim()) return;
+
+    setError(null);
+    setPlayback("loading");
 
     try {
       const res = await fetch("/api/voice", {
@@ -68,114 +90,199 @@ export function VoiceAgent({ text }: { text: string }) {
       let data: {
         mode?: string;
         audio?: string;
+        text?: string;
         message?: string;
         loggedEntries?: VoiceLogEntry[];
       };
+
       try {
         data = await res.json();
       } catch {
         setError(`Voice API returned invalid response (HTTP ${res.status}).`);
-        setSpeaking(false);
+        setPlayback("idle");
         return;
       }
 
-      if (data.mode === "elevenlabs" && data.audio) {
-        setMode("elevenlabs");
+      if (data.loggedEntries?.length) {
+        appendLocalSessionLogs(data.loggedEntries);
+        window.dispatchEvent(new CustomEvent("reloop-voice-log-updated"));
+      }
 
-        if (data.loggedEntries?.length) {
-          const merged = appendLocalSessionLogs(data.loggedEntries);
-          setMemory(buildMemoryView(merged));
-        }
+      if (data.mode === "browser" && data.text?.trim()) {
+        setMode("browser");
+        setNotice(data.message ?? "Using browser voice — ElevenLabs unavailable.");
+        setError(null);
+        stopPlayback();
+        setPlayback("playing");
 
-        const audio = new Audio(data.audio);
-        audio.onended = () => {
-          setSpeaking(false);
-          refreshMemory();
-        };
-        audio.onerror = () => {
-          setSpeaking(false);
-          setError("Failed to play ElevenLabs audio in browser.");
-        };
-        await audio.play();
+        await speakWithBrowser(data.text);
+        setPlayback("idle");
         return;
       }
 
-      setMode("demo");
-      setError(
-        data.message ||
-          "ElevenLabs unavailable. Check ELEVEN_API_KEY in .env.local and restart npm run dev."
-      );
-      setSpeaking(false);
+      if (data.mode !== "elevenlabs" || !data.audio) {
+        setMode("demo");
+        setError(
+          data.message ||
+            "ElevenLabs unavailable. Check ELEVEN_API_KEY in .env.local and restart npm run dev."
+        );
+        setPlayback("idle");
+        return;
+      }
+
+      setMode("elevenlabs");
+      setNotice(null);
+
+      stopPlayback();
+
+      const audio = new Audio(data.audio);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        audioRef.current = null;
+        setPlayback("idle");
+      };
+      audio.onerror = () => {
+        audioRef.current = null;
+        setPlayback("idle");
+        setError("Failed to play ElevenLabs audio in browser.");
+      };
+
+      await audio.play();
+      setPlayback("playing");
     } catch (err) {
-      setSpeaking(false);
+      setPlayback("idle");
       setError(err instanceof Error ? err.message : "Voice request failed");
     }
   }
 
+  async function playOrResume() {
+    if (playback === "paused" && audioRef.current) {
+      try {
+        await audioRef.current.play();
+        setPlayback("playing");
+        setError(null);
+      } catch {
+        setError("Could not resume playback.");
+      }
+      return;
+    }
+
+    if (playback === "paused" && mode === "browser") {
+      try {
+        setPlayback("playing");
+        await speakWithBrowser(browserTextRef.current || text);
+        setPlayback("idle");
+      } catch {
+        setError("Could not resume browser speech.");
+        setPlayback("idle");
+      }
+      return;
+    }
+
+    if (playback === "idle") {
+      await loadAndPlay();
+    }
+  }
+
+  function pause() {
+    if (mode === "browser" && playback === "playing") {
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.pause();
+        setPlayback("paused");
+      }
+      return;
+    }
+
+    const audio = audioRef.current;
+    if (!audio || playback !== "playing") return;
+    audio.pause();
+    setPlayback("paused");
+  }
+
+  function stop() {
+    stopPlayback();
+  }
+
+  const isLoading = playback === "loading";
+  const isPlaying = playback === "playing";
+  const isPaused = playback === "paused";
+
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-white flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+        <h3 className="font-semibold text-white flex items-center gap-2 text-sm sm:text-base">
           <Volume2 className="h-4 w-4 text-emerald-400" />
           Voice Operations Agent
         </h3>
         <span className="text-xs text-zinc-500">
-          {mode === "elevenlabs" ? "ElevenLabs" : "ElevenLabs (not configured)"}
+          {mode === "elevenlabs"
+            ? "ElevenLabs · current analysis"
+            : mode === "browser"
+              ? "Browser voice · ElevenLabs blocked"
+              : "ElevenLabs (not configured)"}
         </span>
       </div>
 
-      {memory && memory.sessionCount > 0 && (
-        <div className="mb-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-          <p className="text-xs text-emerald-400 flex items-center gap-1.5 font-medium">
-            <History className="h-3.5 w-3.5" />
-            Remembers {memory.sessionCount} previous session
-            {memory.sessionCount !== 1 ? "s" : ""}
-          </p>
-          <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1">
-            <HardDrive className="h-3 w-3" />
-            Saved in localStorage + server log
-          </p>
-          {memory.summary && (
-            <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{memory.summary}</p>
-          )}
-        </div>
+      {notice && (
+        <p className="text-xs text-sky-400 mb-4 flex items-start gap-1.5">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          {notice}
+        </p>
       )}
 
       {error && (
-        <p className="text-xs text-amber-400 mb-3 flex items-start gap-1.5">
+        <p className="text-xs text-amber-400 mb-4 flex items-start gap-1.5">
           <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           {error}
         </p>
       )}
-      <p className="text-sm text-zinc-300 mb-4 italic">&ldquo;{text}&rdquo;</p>
-      <button
-        onClick={speak}
-        disabled={speaking || !text}
-        className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-      >
-        {speaking ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Volume2 className="h-4 w-4" />
-        )}
-        {speaking ? "Speaking..." : "Play Voice Summary"}
-      </button>
 
-      {memory && memory.recent.length > 0 && (
-        <div className="mt-4 border-t border-zinc-800 pt-3">
-          <p className="text-xs text-zinc-500 mb-2">Recent session memory</p>
-          <ul className="space-y-1.5 max-h-28 overflow-y-auto">
-            {memory.recent.slice(0, 4).map((entry, i) => (
-              <li key={`${entry.timestamp}-${i}`} className="text-xs text-zinc-400 truncate">
-                <span className="text-zinc-600">
-                  {new Date(entry.timestamp).toLocaleString()} ·
-                </span>{" "}
-                {entry.text.slice(0, 100)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void playOrResume()}
+          disabled={!text || isLoading || isPlaying}
+          className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50 min-w-[120px]"
+        >
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : isPaused ? (
+            <Play className="h-4 w-4" />
+          ) : (
+            <Volume2 className="h-4 w-4" />
+          )}
+          {isLoading ? "Loading..." : isPaused ? "Continue" : "Play summary"}
+        </button>
+
+        <button
+          type="button"
+          onClick={pause}
+          disabled={!isPlaying}
+          className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 min-w-[100px]"
+        >
+          <Pause className="h-4 w-4" />
+          Pause
+        </button>
+
+        <button
+          type="button"
+          onClick={stop}
+          disabled={!isPlaying && !isPaused}
+          className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 min-w-[100px]"
+        >
+          <Square className="h-4 w-4" />
+          Stop
+        </button>
+      </div>
+
+      <p className="text-xs text-zinc-500 mt-3">
+        {isPlaying
+          ? "Speaking your latest inventory analysis…"
+          : isPaused
+            ? "Playback paused — press Continue or Stop."
+            : "Plays a summary built from your current uploaded or demo inventory run."}
+      </p>
     </div>
   );
 }

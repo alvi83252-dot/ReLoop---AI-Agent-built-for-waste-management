@@ -116,4 +116,28 @@ export interface AgentContext {
   risks: Record<string, unknown>[];
   reflection: string;
   timeline: AgentStep[];
+  nebius?: {
+    jobs: {
+      carbon: "live" | "demo" | "error";
+      reflection: "live" | "demo" | "error";
+      backup: "live" | "demo" | "error";
+    };
+    carbonInsight?: string;
+    reflectionInsight?: string;
+    backupSummary?: string;
+    model?: string;
+  };
 }
+
+export type NebiusBackup = {
+  status: "live" | "demo" | "error";
+  model?: string;
+  summary: string;
+  carbonInsight?: string;
+  reflectionInsight?: string;
+  jobs: {
+    carbon: "live" | "demo" | "error";
+    reflection: "live" | "demo" | "error";
+    backup: "live" | "demo" | "error";
+  };
+};

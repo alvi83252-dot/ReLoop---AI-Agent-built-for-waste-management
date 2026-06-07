@@ -62,6 +62,23 @@ class InferenceResult(BaseModel):
     demo_mode: bool
 
 
+class InventoryScanItem(BaseModel):
+    device_type: str
+    condition_score: float = Field(ge=0, le=1)
+    estimated_age: float = Field(ge=0)
+    quantity: int = Field(ge=1, default=1)
+
+
+class EdgeScanAsset(BaseModel):
+    device_type: str
+    condition_score: float
+    estimated_age: float
+    quantity: int
+    confidence: float
+    processed_by: str
+    demo_mode: bool
+
+
 DEVICE_MAP = {"laptop": 0, "monitor": 1, "switch": 2, "server": 3}
 
 
@@ -118,9 +135,11 @@ def torch_inference(asset: AssetInput) -> InferenceResult:
 def health():
     return {
         "status": "ok",
+        "role": "zgx_edge",
         "pytorch": HAS_TORCH,
         "demo_mode": DEMO_MODE or not HAS_TORCH,
-        "hardware": "NVIDIA DGX Spark / ZGX Nano",
+        "hardware": "HP ZGX Nano AI Station",
+        "acceleration": "CUDA / TensorRT / PyTorch",
     }
 
 
@@ -134,3 +153,48 @@ def edge_inference(asset: AssetInput):
 @app.post("/inference/batch")
 def batch_inference(assets: list[AssetInput]):
     return [edge_inference(a) for a in assets]
+
+
+@app.post("/edge/scan")
+def edge_scan_batch(inventory: list[InventoryScanItem]):
+    """Batch edge scan for ZGX Nano — TensorRT/PyTorch inference per asset group."""
+    assets: list[EdgeScanAsset] = []
+    for item in inventory:
+        result = edge_inference(
+            AssetInput(
+                device_type=item.device_type,
+                condition_score=item.condition_score,
+                estimated_age=item.estimated_age,
+                quantity=item.quantity,
+            )
+        )
+        assets.append(
+            EdgeScanAsset(
+                device_type=item.device_type,
+                condition_score=result.condition_score,
+                estimated_age=item.estimated_age,
+                quantity=item.quantity,
+                confidence=result.confidence,
+                processed_by=result.processed_by,
+                demo_mode=result.demo_mode,
+            )
+        )
+    return {
+        "status": "edge_scan_complete",
+        "processed_at": "ZGX_NANO",
+        "hardware": "HP ZGX Nano AI Station",
+        "assets": assets,
+    }
+
+
+@app.post("/edge/execute")
+def edge_execute(payload: dict):
+    """Acknowledge plan execution on ZGX edge node."""
+    summary = payload.get("summary", {})
+    return {
+        "status": "executed_on_zgx",
+        "hardware": "HP ZGX Nano AI Station",
+        "devices_rescued": summary.get("devicesRescued"),
+        "carbon_saved_kg": summary.get("carbonSavedKg"),
+        "value_recovered_gbp": summary.get("valueRecoveredGBP"),
+    }

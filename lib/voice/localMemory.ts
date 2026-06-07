@@ -1,4 +1,5 @@
 import type { VoiceLogEntry, VoiceMemoryView } from "@/lib/voice/types";
+import { getSubstantiveReplies } from "@/lib/voice/memoryAnswer";
 
 export const LOCAL_STORAGE_KEY = "reloop_voice_session_logs";
 const MAX_LOCAL_ENTRIES = 200;
@@ -71,9 +72,8 @@ export function buildMemoryView(entries: VoiceLogEntry[]): VoiceMemoryView {
         e.text.toLowerCase().includes("voice summary"))
   );
 
-  const assistantTurns = entries.filter((e) => e.role === "assistant");
   const userTurns = entries.filter((e) => e.role === "user");
-  const lastAssistant = assistantTurns.at(-1)?.text.slice(0, 180) ?? "";
+  const lastSubstantive = getSubstantiveReplies(entries).at(-1)?.text.slice(0, 180) ?? "";
   const lastUser = userTurns.at(-1)?.text.slice(0, 180) ?? "";
 
   const summary = [
@@ -81,7 +81,7 @@ export function buildMemoryView(entries: VoiceLogEntry[]): VoiceMemoryView {
       ? `Stored sessions: ${Math.max(sessionEvents.length, 1)} (${entries.length} log entries).`
       : "",
     lastUser ? `Last prompt: ${lastUser}` : "",
-    lastAssistant ? `Last spoken: ${lastAssistant}` : "",
+    lastSubstantive ? `Last recovery briefing: ${lastSubstantive}` : "",
   ]
     .filter(Boolean)
     .join(" ");

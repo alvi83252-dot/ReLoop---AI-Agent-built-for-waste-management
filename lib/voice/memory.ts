@@ -1,8 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { VoiceLogEntry, VoiceLogRole } from "@/lib/voice/types";
+import {
+  computeVoiceSessionStats,
+  type VoiceSessionStats,
+} from "@/lib/voice/sessionStats";
+import { getSubstantiveReplies, groupEntriesBySession } from "@/lib/voice/memoryAnswer";
 
 export type { VoiceLogEntry, VoiceLogRole } from "@/lib/voice/types";
+export type { VoiceSessionStats } from "@/lib/voice/sessionStats";
 
 const LOG_PATH = path.join(process.cwd(), "data", "voice_session_log.jsonl");
 const MAX_HISTORY_TURNS = 40;
@@ -72,18 +78,17 @@ export function getPriorSessionSummary(): string {
 
   const userTurns = entries.filter((e) => e.role === "user");
   const assistantTurns = entries.filter((e) => e.role === "assistant");
-  const sessionStarts = entries.filter(
-    (e) => e.role === "event" && e.text.toLowerCase().includes("session")
-  );
-
   const lastUser = userTurns.at(-1)?.text.slice(0, 180) ?? "";
-  const lastAssistant = assistantTurns.at(-1)?.text.slice(0, 180) ?? "";
+  const lastSubstantive = getSubstantiveReplies(entries).at(-1)?.text.slice(0, 180) ?? "";
+
+  const sessionBlocks = groupEntriesBySession(entries);
 
   return [
-    `Prior voice sessions: ${Math.max(sessionStarts.length, 1)}.`,
+    `Prior voice sessions: ${Math.max(sessionBlocks.length, 1)}.`,
     `Logged history: ${userTurns.length} prompts, ${assistantTurns.length} responses.`,
     lastUser ? `Last prompt: ${lastUser}` : "",
-    lastAssistant ? `Last spoken summary: ${lastAssistant}` : "",
+    lastSubstantive ? `Last recovery briefing: ${lastSubstantive}` : "",
+    'You can ask "list all sessions" or "what did you say at [time]".',
   ]
     .filter(Boolean)
     .join(" ");
@@ -107,4 +112,8 @@ export function getSessionCount(): number {
           e.text.toLowerCase().includes("voice summary played"))
     ).length
   );
+}
+
+export function getSessionStats(): VoiceSessionStats {
+  return computeVoiceSessionStats(loadFullVoiceSession());
 }

@@ -30,6 +30,21 @@ export function completeStep(step: AgentStep, message?: string): AgentStep {
   };
 }
 
+/** Replace the running step in-place so the timeline never shows duplicate entries. */
+export function finishStep(
+  timeline: AgentStep[],
+  step: AgentStep,
+  message?: string
+): void {
+  const completed = completeStep(step, message);
+  const index = timeline.findIndex((entry) => entry.id === step.id);
+  if (index >= 0) {
+    timeline[index] = completed;
+  } else {
+    timeline.push(completed);
+  }
+}
+
 export function resetStepCounter() {
   stepCounter = 0;
 }

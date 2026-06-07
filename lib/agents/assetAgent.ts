@@ -1,14 +1,15 @@
 import type { AgentContext, AssetPayload, InventoryItem } from "@/lib/types";
 import { AssetPayloadSchema } from "@/lib/types";
-import { completeStep, createStep, simulateAgentDelay } from "./utils";
+import { AGENT_NAMES } from "./names";
+import { finishStep, createStep, simulateAgentDelay } from "./utils";
 
 export async function runAssetIntakeAgent(
   ctx: AgentContext
 ): Promise<AgentContext> {
   const step = createStep(
-    "Asset Intake Agent",
+    AGENT_NAMES.assetIntake,
     "edge",
-    "Scanning inventory on HP ZGX Nano — extracting device types, age, condition..."
+    "Scanning inventory on edge — device types, age, and condition..."
   );
   ctx.timeline.push(step);
   await simulateAgentDelay(600);
@@ -28,8 +29,10 @@ export async function runAssetIntakeAgent(
   );
 
   ctx.assets = assets;
-  ctx.timeline.push(
-    completeStep(step, `Edge scan complete: ${ctx.inventory.length} asset groups classified via TensorRT`)
+  finishStep(
+    ctx.timeline,
+    step,
+    `Edge scan complete: ${ctx.inventory.length} asset groups classified`
   );
   return ctx;
 }

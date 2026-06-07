@@ -59,9 +59,17 @@ export function EdgeBadge({ active }: { active?: boolean }) {
       <span
         className={`h-2 w-2 rounded-full ${active ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`}
       />
-      {active
-        ? "Running on NVIDIA ZGX Nano AI Station"
-        : "Edge AI Standby"}
+      {active ? (
+        <>
+          <span className="hidden sm:inline">Running on NVIDIA ZGX Nano AI Station</span>
+          <span className="sm:hidden">ZGX Nano live</span>
+        </>
+      ) : (
+        <>
+          <span className="hidden sm:inline">Edge AI Standby</span>
+          <span className="sm:hidden">Edge standby</span>
+        </>
+      )}
     </div>
   );
 }

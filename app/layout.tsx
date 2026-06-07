@@ -16,6 +16,16 @@ export const metadata: Metadata = {
   title: "ReLoop AI — Before waste becomes waste",
   description:
     "Autonomous circular-economy intelligence platform for the NVIDIA Hack for Impact London hackathon.",
+  icons: {
+    icon: "/reloop-logo.jpeg",
+    apple: "/reloop-logo.jpeg",
+  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({

@@ -1,12 +1,13 @@
 import type { AgentContext } from "@/lib/types";
 import { getLondonContext } from "@/lib/simulation/londonData";
-import { completeStep, createStep, simulateAgentDelay } from "./utils";
+import { AGENT_NAMES } from "./names";
+import { finishStep, createStep, simulateAgentDelay } from "./utils";
 
 export async function runMatchingAgent(ctx: AgentContext): Promise<AgentContext> {
   const step = createStep(
-    "Matching Agent",
+    AGENT_NAMES.matching,
     "dgx",
-    "Matching assets to London refurbishers, schools, charities, and recyclers..."
+    "Matching assets to London refurbishers, schools, and recyclers..."
   );
   ctx.timeline.push(step);
   await simulateAgentDelay(450);
@@ -25,8 +26,10 @@ export async function runMatchingAgent(ctx: AgentContext): Promise<AgentContext>
     };
   });
 
-  ctx.timeline.push(
-    completeStep(step, `${ctx.matches.length} destination matches found across London network`)
+  finishStep(
+    ctx.timeline,
+    step,
+    `${ctx.matches.length} destination matches found across London`
   );
   return ctx;
 }

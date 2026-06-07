@@ -1,7 +1,9 @@
 import type { AgentContext, OptimizationResult, RecoveryAction } from "@/lib/types";
 import { OptimizationResultSchema } from "@/lib/types";
 import { pickDestination } from "@/lib/simulation/londonData";
-import { completeStep, createStep, simulateAgentDelay } from "./utils";
+import { nebiusCarbonImpactAgent } from "@/lib/llm/nebiusAgents";
+import { AGENT_NAMES } from "./names";
+import { finishStep, createStep, simulateAgentDelay } from "./utils";
 
 function decideAction(
   conditionScore: number,
@@ -17,9 +19,9 @@ function decideAction(
 
 export async function runCircularAgent(ctx: AgentContext): Promise<AgentContext> {
   const step = createStep(
-    "Circular Economy Agent",
+    AGENT_NAMES.circular,
     "dgx",
-    "Optimising highest-value circular outcomes across asset portfolio..."
+    "Optimising circular outcomes across the portfolio..."
   );
   ctx.timeline.push(step);
   await simulateAgentDelay(450);
@@ -48,17 +50,15 @@ export async function runCircularAgent(ctx: AgentContext): Promise<AgentContext>
     });
   });
 
-  ctx.timeline.push(
-    completeStep(step, "Circular routing decisions computed for all asset groups")
-  );
+  finishStep(ctx.timeline, step, "Circular routing computed for all asset groups");
   return ctx;
 }
 
 export async function runCarbonAgent(ctx: AgentContext): Promise<AgentContext> {
   const step = createStep(
-    "Carbon Impact Agent",
+    AGENT_NAMES.carbon,
     "dgx",
-    "Simulating carbon savings using London emissions datasets..."
+    "Estimating carbon savings using London emissions data..."
   );
   ctx.timeline.push(step);
   await simulateAgentDelay(400);
@@ -81,15 +81,31 @@ export async function runCarbonAgent(ctx: AgentContext): Promise<AgentContext> {
     (s, c) => s + (c.carbonSavedKg as number),
     0
   );
-  ctx.timeline.push(
-    completeStep(step, `Carbon forecast: ${totalCarbon.toLocaleString()} kg CO₂ saved vs disposal`)
-  );
+
+  const nebiusCarbon = await nebiusCarbonImpactAgent(ctx);
+  ctx.nebius = {
+    ...ctx.nebius,
+    jobs: {
+      carbon: nebiusCarbon.status,
+      reflection: ctx.nebius?.jobs.reflection ?? "demo",
+      backup: ctx.nebius?.jobs.backup ?? "demo",
+    },
+    carbonInsight: nebiusCarbon.insight || ctx.nebius?.carbonInsight,
+    model: nebiusCarbon.model ?? ctx.nebius?.model,
+  };
+
+  const carbonMessage =
+    nebiusCarbon.status === "live"
+      ? `Carbon forecast: ${totalCarbon.toLocaleString()} kg CO₂ (local) + Nebius cloud analysis`
+      : `Carbon forecast: ${totalCarbon.toLocaleString()} kg CO₂ saved vs disposal (London datasets)`;
+
+  finishStep(ctx.timeline, step, carbonMessage);
   return ctx;
 }
 
 export async function runEconomicAgent(ctx: AgentContext): Promise<AgentContext> {
   const step = createStep(
-    "Economic Agent",
+    AGENT_NAMES.economic,
     "dgx",
     "Calculating recovery value and avoided replacement costs..."
   );
@@ -123,8 +139,10 @@ export async function runEconomicAgent(ctx: AgentContext): Promise<AgentContext>
     (s, e) => s + (e.resaleValueGBP as number),
     0
   );
-  ctx.timeline.push(
-    completeStep(step, `Economic recovery: £${totalValue.toLocaleString()} potential value`)
+  finishStep(
+    ctx.timeline,
+    step,
+    `Economic recovery: £${totalValue.toLocaleString()} potential value`
   );
   return ctx;
 }

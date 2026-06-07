@@ -4,15 +4,15 @@ import { motion } from "framer-motion";
 import { ArrowDown } from "lucide-react";
 
 const stages = [
-  { label: "ZGX Nano Edge Intake Agent", layer: "edge" },
-  { label: "DGX Spark Orchestrator", layer: "dgx" },
-  { label: "Lifecycle Agent", layer: "agent" },
-  { label: "Carbon Agent", layer: "agent" },
-  { label: "Economic Agent", layer: "agent" },
-  { label: "Matching Agent", layer: "agent" },
-  { label: "Decision Synthesizer", layer: "synthesis" },
-  { label: "Edge Execution Agent — ZGX Nano", layer: "edge" },
-  { label: "Reports + Voice Output", layer: "output" },
+  { label: "Edge Intake (ZGX)", layer: "edge" },
+  { label: "DGX Orchestrator", layer: "dgx" },
+  { label: "Lifecycle", layer: "agent" },
+  { label: "Carbon Analysis", layer: "agent" },
+  { label: "Economic Value", layer: "agent" },
+  { label: "Partner Matching", layer: "agent" },
+  { label: "Decision Engine", layer: "synthesis" },
+  { label: "Edge Delivery", layer: "edge" },
+  { label: "Reports + Voice", layer: "output" },
 ];
 
 export function ArchitectureFlow({ activeStep = -1 }: { activeStep?: number }) {
