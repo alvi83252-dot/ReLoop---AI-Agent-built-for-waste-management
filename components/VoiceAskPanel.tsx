@@ -10,6 +10,8 @@ import {
   AlertCircle,
   Square,
   Bot,
+  Pause,
+  Play,
 } from "lucide-react";
 import { appendLocalSessionLogs } from "@/lib/voice/localMemory";
 import type { VoiceLogEntry } from "@/lib/voice/types";
@@ -35,7 +37,8 @@ interface ConversationTurn {
   engine?: string;
 }
 
-type AgentPhase = "idle" | "listening" | "thinking" | "speaking";
+type AgentPhase = "idle" | "listening" | "thinking" | "speaking" | "paused";
+type VoicePlaybackMode = "elevenlabs" | "browser" | null;
 
 interface VoiceAskPanelProps {
   contextSummary?: string;
@@ -59,6 +62,8 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playbackGenRef = useRef(0);
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
+  const browserSpeechTextRef = useRef("");
+  const voiceModeRef = useRef<VoicePlaybackMode>(null);
 
   const stopCurrentAudio = useCallback(() => {
     const audio = audioRef.current;
@@ -77,6 +82,8 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
 
   const abortPlayback = useCallback(() => {
     playbackGenRef.current += 1;
+    voiceModeRef.current = null;
+    browserSpeechTextRef.current = "";
     stopCurrentAudio();
     try {
       recognitionRef.current?.stop();
@@ -86,6 +93,47 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
     recognitionRef.current = null;
   }, [stopCurrentAudio]);
 
+  const pauseSpeaking = useCallback(() => {
+    if (voiceModeRef.current === "browser") {
+      window.speechSynthesis?.pause();
+      setPhase("paused");
+      return;
+    }
+
+    const audio = audioRef.current;
+    if (audio && !audio.paused) {
+      audio.pause();
+      setPhase("paused");
+    }
+  }, []);
+
+  const resumeSpeaking = useCallback(() => {
+    if (voiceModeRef.current === "browser") {
+      window.speechSynthesis?.resume();
+      setPhase("speaking");
+      return;
+    }
+
+    const audio = audioRef.current;
+    if (audio) {
+      void audio.play().catch(() => {
+        setError("Could not resume playback.");
+        setPhase("idle");
+      });
+      setPhase("speaking");
+    }
+  }, []);
+
+  const skipSpeaking = useCallback(() => {
+    abortPlayback();
+    if (liveActiveRef.current) {
+      setPhase("listening");
+      setNotice(null);
+      return;
+    }
+    setPhase("idle");
+  }, [abortPlayback]);
+
   const speakBrowser = useCallback(
     (text: string, generation: number) =>
       new Promise<void>((resolve) => {
@@ -94,10 +142,13 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
           return;
         }
         window.speechSynthesis.cancel();
+        browserSpeechTextRef.current = text;
+        voiceModeRef.current = "browser";
         const utterance = new SpeechSynthesisUtterance(text);
 
         const finish = () => {
           window.clearInterval(watch);
+          if (voiceModeRef.current === "browser") voiceModeRef.current = null;
           resolve();
         };
 
@@ -122,6 +173,7 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
 
       try {
         if (data.mode === "elevenlabs" && data.audio) {
+          voiceModeRef.current = "elevenlabs";
           await new Promise<void>((resolve) => {
             const audio = new Audio(data.audio);
             audioRef.current = audio;
@@ -129,6 +181,7 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
             const finish = () => {
               window.clearInterval(watch);
               if (audioRef.current === audio) audioRef.current = null;
+              if (voiceModeRef.current === "elevenlabs") voiceModeRef.current = null;
               resolve();
             };
 
@@ -408,6 +461,9 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
     setNotice("Live agent stopped.");
   }, [abortPlayback]);
 
+  const isSpeaking = phase === "speaking" || phase === "paused";
+  const isBusy = phase === "thinking" || isSpeaking;
+
   useEffect(() => {
     return () => {
       liveActiveRef.current = false;
@@ -422,8 +478,6 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
       behavior: "smooth",
     });
   }, [conversation, phase]);
-
-  const isBusy = phase === "thinking" || phase === "speaking";
 
   return (
     <div className="mt-4 pt-4 border-t border-zinc-800">
@@ -444,6 +498,7 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
             phase === "listening" && "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
             phase === "thinking" && "border-amber-500/40 bg-amber-500/10 text-amber-400",
             phase === "speaking" && "border-sky-500/40 bg-sky-500/10 text-sky-300",
+            phase === "paused" && "border-amber-500/40 bg-amber-500/10 text-amber-300",
             liveMode && phase === "idle" && "border-green-500/40 bg-green-500/10 text-green-400"
           )}
         >
@@ -454,6 +509,7 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
           {phase === "listening" && "Listening…"}
           {phase === "thinking" && "Thinking…"}
           {phase === "speaking" && "Speaking…"}
+          {phase === "paused" && "Paused"}
           {liveMode && phase === "idle" && "Live"}
         </span>
       </div>
@@ -501,13 +557,44 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
             disabled={!question.trim() || isBusy}
             className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
           >
-            {isBusy ? (
+            {phase === "thinking" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Send className="h-4 w-4" />
             )}
             Ask once
           </button>
+        )}
+
+        {isSpeaking && (
+          <>
+            <button
+              type="button"
+              onClick={pauseSpeaking}
+              disabled={phase === "paused"}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+            >
+              <Pause className="h-4 w-4" />
+              Pause
+            </button>
+            <button
+              type="button"
+              onClick={resumeSpeaking}
+              disabled={phase !== "paused"}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+            >
+              <Play className="h-4 w-4" />
+              Continue
+            </button>
+            <button
+              type="button"
+              onClick={skipSpeaking}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
+            >
+              <Square className="h-4 w-4" />
+              Stop speaking
+            </button>
+          </>
         )}
       </div>
 
@@ -527,6 +614,15 @@ export function VoiceAskPanel({ contextSummary }: VoiceAskPanelProps) {
             disabled={isBusy}
           />
         </div>
+      )}
+
+      {isSpeaking && (
+        <p className="text-xs text-sky-400 mb-3 flex items-center gap-1.5">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          {phase === "paused"
+            ? "Playback paused — Continue or Stop speaking. Useful for long session memory answers."
+            : "Speaking — Pause anytime, including when reading previous session logs."}
+        </p>
       )}
 
       {liveMode && phase === "listening" && (
